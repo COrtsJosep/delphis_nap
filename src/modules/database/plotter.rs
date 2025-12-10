@@ -454,6 +454,7 @@ impl DataBase {
         // Finally, create the legend and export.
         chart
             .configure_series_labels()
+            .position(SeriesLabelPosition::UpperRight)
             .border_style(&BLACK)
             .background_style(&WHITE.mix(0.8))
             .draw()
