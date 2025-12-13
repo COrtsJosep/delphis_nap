@@ -1,6 +1,6 @@
 # :dizzy: :sleeping: delphis_nap :sleeping: :dizzy:
 
-Delphi's Nap (pronounced like _the fin app_ if you come from a country where _f_'s are always preceeded by an _l_-sound, and _n_'s are pronounced like _s_'s) is a very boring piece of Rust software that helps you keep track of your personal finances in a way that is neither oversimplified nor time-consuming.
+Delphi's Nap (a creative transformation from _the fin app_) is a very boring piece of Rust software that helps you keep track of your personal finances in a way that is neither oversimplified nor time-consuming.
 
 ## Description
 
