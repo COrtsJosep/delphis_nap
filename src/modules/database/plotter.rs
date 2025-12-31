@@ -47,27 +47,28 @@ impl BarplotType {
 }
 
 /// Returns the earliest / latest date in the dataframe's "date" column.
-/// Panics if no such column.
-fn extreme_date(data_frame: &DataFrame, extrema: Extrema) -> NaiveDate {
+fn extreme_date(
+    data_frame: &DataFrame,
+    extrema: Extrema,
+) -> Result<NaiveDate, Box<dyn std::error::Error>> {
     let i: usize = match extrema {
         Extrema::MIN => 0,
         Extrema::MAX => data_frame.height() - 1,
     };
     data_frame
-        .sort(["date"], Default::default())
-        .unwrap()
-        .column("date")
-        .unwrap()
-        .date()
-        .unwrap()
+        .sort(["date"], Default::default())?
+        .column("date")?
+        .date()?
         .as_date_iter()
         .collect::<Vec<Option<NaiveDate>>>()[i]
-        .unwrap()
+        .ok_or("No dates!".into())
 }
 
 /// Returns the smallest / largest value in the dataframe's "value" column.
-/// Panics if no such column.
-fn extreme_value(data_frame: &DataFrame, extrema: Extrema) -> f64 {
+fn extreme_value(
+    data_frame: &DataFrame,
+    extrema: Extrema,
+) -> Result<f64, Box<dyn std::error::Error>> {
     let lazy_frame = match extrema {
         Extrema::MIN => data_frame
             .clone()
@@ -86,32 +87,32 @@ fn extreme_value(data_frame: &DataFrame, extrema: Extrema) -> f64 {
     };
 
     let extreme_value = lazy_frame
-        .collect()
-        .unwrap()
-        .column("value")
-        .unwrap()
-        .f64()
-        .unwrap()
+        .collect()?
+        .column("value")?
+        .f64()?
         .get(0)
-        .unwrap_or(0.0);
+        .ok_or("No values!")?;
 
     match extrema {
         Extrema::MIN => {
             if extreme_value > 0.0 {
-                0.0
+                Ok(0.0)
             } else {
-                extreme_value
+                Ok(extreme_value)
             }
         }
-        Extrema::MAX => extreme_value,
+        Extrema::MAX => Ok(extreme_value),
     }
 }
 
 impl DataBase {
     // Writes a funds evolution plot (and optionally a csv too), with x-axis
     // date, and y-axis total funds.
-    pub(crate) fn funds_evolution(&self, currency_to: &Currency) -> () {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
+    pub(crate) fn funds_evolution(
+        &self,
+        currency_to: &Currency,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
 
         // Fetch the ammounts in the different accounts in the date
         // of their creation.
@@ -125,25 +126,21 @@ impl DataBase {
                 col("currency"),
                 col("creation_date").alias("date"),
             ])
-            .collect()
-            .expect("Failed to select account table");
+            .collect()?;
 
         // Fetch the table with fund movements.
         let mut funds_table: DataFrame = self
             .funds_table
             .data_frame
             .clone()
-            .select(["value", "currency", "date"])
-            .expect("Failed to select funds table");
+            .select(["value", "currency", "date"])?;
 
         // First step is getting all fund changes in history, and to those, adding the initial
         // balances of all accounts.
-        funds_table = funds_table
-            .vstack(&initial_balances)
-            .expect("Could not append new data");
+        funds_table = funds_table.vstack(&initial_balances)?;
 
         // Next step is converting values into the same currency.
-        funds_table = currency_exchange.exchange_currencies(currency_to, funds_table);
+        funds_table = currency_exchange.exchange_currencies(currency_to, funds_table)?;
 
         // Final data manipulation step involves grouping fund changes per natural
         // day, expanding to all days without movements, and doing the cumsum!
@@ -161,61 +158,47 @@ impl DataBase {
                 },
             )
             .agg([col("value").sum()])
-            .collect()
-            .expect("Failed to aggregate by day")
-            .upsample::<[String; 0]>([], "date", Duration::parse("1d"))
-            .expect("Failed to expand date")
-            .fill_null(FillNullStrategy::Zero)
-            .expect("Failed to fill null values")
+            .collect()?
+            .upsample::<[String; 0]>([], "date", Duration::parse("1d"))?
+            .fill_null(FillNullStrategy::Zero)?
             .lazy()
             .select([
                 col("date").alias("date"),
                 col("value").cum_sum(false).alias("value"),
             ])
-            .collect()
-            .expect("Failed to cumsum");
+            .collect()?;
 
         if currency_to == &Currency::EUR {
             // I like having the data in csv
             let file_name = "data/funds_evolution_table.csv";
             let path: &Path = Path::new(file_name);
-            if !path.parent().expect("path does not have parent").exists() {
-                let _ = create_dir(path.parent().expect("path does not have parents"));
+            let parent: &Path = path.parent().ok_or("Path has no parent!")?;
+            if !parent.exists() {
+                let _ = create_dir(parent);
             }
 
-            let mut file =
-                File::create(path).expect("Could not create file funds_evolution_table.csv");
+            let mut file = File::create(path)?;
 
             CsvWriter::new(&mut file)
                 .include_header(true)
                 .with_separator(b',')
-                .finish(&mut result)
-                .expect("Failed to save fund evolution table.");
+                .finish(&mut result)?;
         }
 
-        // Now comes the plotting part. First extract data as vectors.
         let dates: Vec<NaiveDate> = result
-            .column("date")
-            .expect("Could not find date column")
-            .date()
-            .expect("Could not convert date column to date (what the hell does that mean?)")
+            .column("date")?
+            .date()?
             .as_date_iter()
-            .map(|opt_date| opt_date.expect("Found null value in date column"))
-            .collect::<Vec<NaiveDate>>();
+            .map(|opt_date| opt_date.ok_or("Found null value in date column"))
+            .collect::<Result<Vec<NaiveDate>, _>>()?;
 
-        let values: Vec<f64> = result
-            .column("value")
-            .expect("Could not find value column")
-            .f64()
-            .expect("Could not convert date column to f64 (what the hell does that mean?)")
-            .into_no_null_iter()
-            .collect();
+        let values: Vec<f64> = result.column("value")?.f64()?.into_no_null_iter().collect();
 
         let bankrupcy_values: Vec<f64> = vec![0.0; values.len()];
 
         // Then create the plot
         let root = SVGBackend::new("figures/funds_evolution.svg", (800, 640)).into_drawing_area();
-        root.fill(&WHITE).expect("Failed to fill plotting root");
+        root.fill(&WHITE)?;
 
         let mut chart = ChartBuilder::on(&root)
             .caption("Evolution of Total Funds", ("sans-serif", 20).into_font())
@@ -224,8 +207,7 @@ impl DataBase {
             .build_cartesian_2d(
                 dates[0]..dates[dates.len() - 1],
                 0.0..values.iter().cloned().fold(0. / 0., f64::max),
-            )
-            .expect("Failed to build chart");
+            )?;
 
         chart
             .configure_mesh()
@@ -234,15 +216,13 @@ impl DataBase {
             .y_desc(currency_to.to_string().as_str())
             .y_label_formatter(&|y| format!("{:.0}", *y))
             .y_label_style(("sans-serif", 15).into_font())
-            .draw()
-            .expect("Failed to draw");
+            .draw()?;
 
         chart
             .draw_series(LineSeries::new(
                 dates.iter().zip(values.iter()).map(|(d, v)| (*d, *v)),
                 &BLACK,
-            ))
-            .expect("Failed to draw line")
+            ))?
             .label("Total Funds")
             .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
 
@@ -253,8 +233,7 @@ impl DataBase {
                     .zip(bankrupcy_values.iter())
                     .map(|(d, v)| (*d, *v)),
                 &RED,
-            ))
-            .expect("Failed to draw line")
+            ))?
             .label("Bankrupcy")
             .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
@@ -262,11 +241,12 @@ impl DataBase {
             .configure_series_labels()
             .border_style(&BLACK)
             .background_style(&WHITE.mix(0.8))
-            .draw()
-            .unwrap();
+            .draw()?;
 
         // Finally save the plot
-        root.present().expect("Failed to present plot");
+        root.present()?;
+
+        Ok(())
     }
 
     // Creates a stacked barplot of monthly expenses. One column per month, split into
@@ -275,15 +255,15 @@ impl DataBase {
         &self,
         currency_to: &Currency,
         barplot_type: &BarplotType,
-    ) -> () {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
 
         let mut data_frame: DataFrame = self.expenses_table.data_frame.clone();
 
         // First: convert the ammounts to the desired output currency,
         // and group by month.
         data_frame = currency_exchange
-            .exchange_currencies(currency_to, data_frame)
+            .exchange_currencies(currency_to, data_frame)?
             .lazy()
             .sort(["date"], Default::default())
             .group_by_dynamic(
@@ -297,8 +277,7 @@ impl DataBase {
                 },
             )
             .agg([col("value").sum()])
-            .collect()
-            .expect("Failed to aggregate by month");
+            .collect()?;
 
         // Then: if the column plot is relative (columns add to 100),
         // normalize all months to add to 100.
@@ -319,22 +298,18 @@ impl DataBase {
                     .lazy()
                     .left_join(totals_data_frame, col("date"), col("date"))
                     .with_column((lit(100.0) * col("value") / col("total")).alias("value"))
-                    .collect()
-                    .unwrap()
+                    .collect()?
             }
         };
 
         // Get vector of unique months.
         let unique_months: Vec<NaiveDate> = data_frame
-            .column("date")
-            .unwrap()
-            .unique_stable()
-            .unwrap()
-            .date()
-            .unwrap()
+            .column("date")?
+            .unique_stable()?
+            .date()?
             .as_date_iter()
-            .map(|date| date.unwrap())
-            .collect::<Vec<NaiveDate>>();
+            .map(|date| date.ok_or("Null value in date column!"))
+            .collect::<Result<Vec<NaiveDate>, _>>()?;
 
         // Now get vector of unique categories, sorted from categories
         // with the largest to smallest spending.
@@ -342,24 +317,20 @@ impl DataBase {
             .sort(
                 ["value"],
                 SortMultipleOptions::new().with_order_descending(true),
-            )
-            .unwrap()
-            .column("category")
-            .unwrap()
-            .unique_stable()
-            .unwrap();
+            )?
+            .column("category")?
+            .unique_stable()?;
 
         let unique_categories: Vec<&str> = binding
-            .str()
-            .unwrap()
+            .str()?
             .iter()
-            .map(|category| category.unwrap())
-            .collect::<Vec<&str>>();
+            .map(|category| category.ok_or("Null in category column!"))
+            .collect::<Result<Vec<&str>, _>>()?;
         let num_categories: usize = unique_categories.len();
 
         // Initialize the plot.
         let root = SVGBackend::new("figures/monthly_expenses.svg", (800, 640)).into_drawing_area();
-        root.fill(&WHITE).expect("Failed to set chart background");
+        root.fill(&WHITE)?;
 
         // Initialize axis, etc.
         let mut chart = ChartBuilder::on(&root)
@@ -370,14 +341,13 @@ impl DataBase {
             .set_label_area_size(LabelAreaPosition::Left, 60)
             .set_label_area_size(LabelAreaPosition::Bottom, 60)
             .build_cartesian_2d(
-                extreme_date(&data_frame, Extrema::MIN)
-                    ..extreme_date(&data_frame, Extrema::MAX)
-                        .checked_add_months(Months::new(2))
-                        .unwrap(),
-                ((extreme_value(&data_frame, Extrema::MIN) - 0.001) * 1.05)
-                    ..(extreme_value(&data_frame, Extrema::MAX) * 1.05),
-            )
-            .expect("Failed to set chart axis");
+                extreme_date(&data_frame, Extrema::MIN)?
+                    ..extreme_date(&data_frame, Extrema::MAX)?
+                        .checked_add_months(Months::new(1))
+                        .ok_or("Could not add month!")?,
+                ((extreme_value(&data_frame, Extrema::MIN)? - 0.001) * 1.05)
+                    ..(extreme_value(&data_frame, Extrema::MAX)? * 1.05),
+            )?;
 
         // Initialize the plotted objects.
         let mut mesh = chart.configure_mesh();
@@ -398,8 +368,7 @@ impl DataBase {
         mesh.x_desc("Date")
             .x_label_style(("sans-serif", 15).into_font())
             .y_label_style(("sans-serif", 15).into_font())
-            .draw()
-            .expect("Failed to render mesh");
+            .draw()?;
 
         // fetch the colour palette
         let palette: Vec<RGBAColor> = fetch_palette(num_categories);
@@ -411,7 +380,9 @@ impl DataBase {
                 index_c = index_c % 14; // wrap around the maximum number of colours
                 let colour = palette[index_c];
                 let x0 = *month;
-                let x1 = month.checked_add_months(Months::new(1)).unwrap();
+                let x1 = month
+                    .checked_add_months(Months::new(1))
+                    .ok_or("Failed to add month!")?;
                 let height = data_frame
                     .clone()
                     .lazy()
@@ -420,12 +391,9 @@ impl DataBase {
                             .eq(lit(*category))
                             .and(col("date").eq(lit(*month))),
                     )
-                    .collect()
-                    .unwrap()
-                    .column("value")
-                    .unwrap()
-                    .f64()
-                    .unwrap()
+                    .collect()?
+                    .column("value")?
+                    .f64()?
                     .max() // easiest way to get the only value, if exists
                     .unwrap_or(0.0);
 
@@ -435,7 +403,7 @@ impl DataBase {
                 let mut bar = Rectangle::new([(x0, y0), (x1, y1)], colour.filled());
                 bar.set_margin(0, 0, 5, 5);
 
-                let ctx = chart.draw_series(vec![bar]).expect("Failed");
+                let ctx = chart.draw_series(vec![bar])?;
                 if index_m == 0 {
                     let style = colour.stroke_width(10);
                     ctx.label(*category).legend(move |(x, y)| {
@@ -457,7 +425,8 @@ impl DataBase {
             .position(SeriesLabelPosition::UpperRight)
             .border_style(&BLACK)
             .background_style(&WHITE.mix(0.8))
-            .draw()
-            .unwrap();
+            .draw()?;
+
+        Ok(())
     }
 }

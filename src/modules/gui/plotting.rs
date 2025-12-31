@@ -52,9 +52,15 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            self.database.funds_evolution(
-                                                &self.fund_evolution_plot_currency,
-                                            );
+                                            match self
+                                                .database
+                                                .funds_evolution(&self.fund_evolution_plot_currency)
+                                            {
+                                                Ok(_) => {}
+                                                Err(e) => {
+                                                    self.throw_error(e);
+                                                }
+                                            }
 
                                             // forget the old one
                                             ui.ctx().forget_all_images();
@@ -141,10 +147,13 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            self.database.monthly_expenses(
+                                            match self.database.monthly_expenses(
                                                 &self.expense_category_plot_currency,
                                                 &self.expense_category_plot_type,
-                                            );
+                                            ) {
+                                                Ok(_) => {},
+                                                Err(e) => {self.throw_error(e);}
+                                            }
 
                                             ui.ctx().forget_all_images();
                                         }

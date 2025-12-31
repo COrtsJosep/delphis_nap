@@ -58,16 +58,19 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            self.expense_summary_csv = self.database.expenses_summary(
+                                            match self.database.expenses_summary(
                                                 self.expense_summary_date_from,
                                                 self.expense_summary_date_to,
                                                 &self.expense_summary_currency
-                                            );
+                                            ) {
+                                                Ok(s) => {self.expense_summary_csv = s; self.expense_summary_csv_correct = true;},
+                                                Err(e) => {self.expense_summary_csv_correct = false; self.throw_error(e);}}
                                         }
 
                                     });
                                 ui.separator();
                             });
+                            if self.expense_summary_csv_correct {
                             strip.cell(|ui| {
                                                 TableBuilder::new(ui)
                                         .columns(Column::auto().resizable(true), column_count)
@@ -102,6 +105,7 @@ impl AppState {
                                         });
                                 ui.separator();
                             });
+                            }
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
@@ -160,14 +164,18 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            self.fund_stand_csv = self.database.current_fund_stand(
+                                            match self.database.current_fund_stand(
                                                 self.fund_stand_currency.as_ref()
-                                            );
+                                            ) {
+                                                Ok(s) => {self.fund_stand_csv = s; self.fund_stand_csv_correct = true;},
+                                                Err(e) => {self.fund_stand_csv_correct = false; self.throw_error(e);}
+                                            }
                                         }
 
                                     });
                                 ui.separator();
                             });
+                            if self.fund_stand_csv_correct{
                             strip.cell(|ui| {
                                                 TableBuilder::new(ui)
                                         .columns(Column::auto().resizable(true), column_count)
@@ -193,7 +201,7 @@ impl AppState {
                                             }                         
                                         });
                                 ui.separator();
-                            });
+                            });}
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
@@ -262,15 +270,18 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            self.expenses_evolution_csv = self.database.evolution_table(
+                                            match self.database.evolution_table(
                                                 &self.expenses_evolution_currency,
                                                 &self.expenses_evolution_time_unit,
-                                            );
+                                            ) {
+                                                Ok(s) => {self.expenses_evolution_csv = s; self.expenses_evolution_csv_correct = true;},
+                                                Err(e) => {self.expenses_evolution_csv_correct = false; self.throw_error(e);}}
                                         }
 
                                     });
                                 ui.separator();
                             });
+                            if self.expenses_evolution_csv_correct {
                             strip.cell(|ui| {
                                 TableBuilder::new(ui)
                                         .columns(Column::auto().resizable(true), column_count)
@@ -296,6 +307,7 @@ impl AppState {
                                             }                         
                                         });
                             });
+                        }
                             strip.cell(|ui| {ui.separator();});
                         });
                 });

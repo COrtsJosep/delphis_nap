@@ -1,4 +1,5 @@
 pub mod browsing;
+pub mod error;
 pub mod inputting;
 pub mod plotting;
 pub mod summarizing;
@@ -30,6 +31,9 @@ pub struct AppState {
     show_fund_evolution_plot_window: bool,
     show_expense_category_plot_window: bool,
     show_expenses_evolution_window: bool,
+    show_error_window: bool,
+
+    error_message: String,
 
     database: DataBase,
 
@@ -65,6 +69,7 @@ pub struct AppState {
     transaction_entity_popup: PopupCloseBehavior,
 
     expense_summary_csv: String,
+    expense_summary_csv_correct: bool,
     #[derivative(Default(value = "Local::now().date_naive()"))]
     expense_summary_date_from: NaiveDate,
     #[derivative(Default(value = "Local::now().date_naive()"))]
@@ -72,17 +77,21 @@ pub struct AppState {
     expense_summary_currency: Currency,
 
     fund_stand_csv: String,
+    fund_stand_csv_correct: bool,
     fund_stand_currency: Option<Currency>,
 
     expenses_evolution_csv: String,
+    expenses_evolution_csv_correct: bool,
     expenses_evolution_currency: Currency,
     expenses_evolution_time_unit: TimeUnit,
 
     last_transactions_csv: String,
+    last_transactions_csv_correct: bool,
     last_transactions_n: usize,
     last_transactions_n_temptative: String,
 
     last_fund_movements_csv: String,
+    last_fund_movements_csv_correct: bool,
     last_fund_movements_n: usize,
     last_fund_movements_n_temptative: String,
 
@@ -191,6 +200,10 @@ impl eframe::App for AppState {
 
         if self.show_expense_category_plot_window {
             self.handle_show_expense_category_plot(ctx);
+        }
+
+        if self.show_error_window {
+            self.handle_show_error_window(ctx);
         }
     }
 }

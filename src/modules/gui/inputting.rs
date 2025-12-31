@@ -66,15 +66,17 @@ impl AppState {
         }
     }
 
-    fn is_valid_transaction_currency(&self) -> bool {
-        &self.transaction_currency
-            == self
-                .database
-                .account(self.transaction_account_id)
-                .currency()
+    fn is_valid_transaction_currency(&mut self) -> bool {
+        match self.database.account(self.transaction_account_id) {
+            Ok(account) => &self.transaction_currency == account.currency(),
+            Err(e) => {
+                self.throw_error(e);
+                false
+            }
+        }
     }
 
-    fn are_valid_transaction_fields(&self) -> bool {
+    fn are_valid_transaction_fields(&mut self) -> bool {
         ((self.transaction_category.len() > 0)
             | (self.transaction_type.is_fund_change() & self.is_valid_transaction_currency()))
             & self.is_valid_transaction_value()
@@ -95,7 +97,6 @@ impl AppState {
                     egui::Grid::new("my_grid")
                         .num_columns(3)
                         .spacing([45.0, 4.0])
-                        //.striped(true)
                         .show(ui, |ui| {
                             ui.label("Entity name:")
                                 .on_hover_text("Name of the entity. For instance, the shop's name");
@@ -115,14 +116,21 @@ impl AppState {
 
                             ui.label("Entity country:")
                                 .on_hover_text("Country where the entity is based.");
-                            ui.add(
-                                AutoCompleteTextEdit::new(
-                                    &mut self.entity_country,
-                                    self.database.entity_countries(),
-                                )
-                                .max_suggestions(10)
-                                .highlight_matches(true),
-                            );
+                            match self.database.entity_countries() {
+                                Ok(entity_countries) => {
+                                    ui.add(
+                                        AutoCompleteTextEdit::new(
+                                            &mut self.entity_country,
+                                            entity_countries,
+                                        )
+                                        .max_suggestions(10)
+                                        .highlight_matches(true),
+                                    );
+                                }
+                                Err(e) => {
+                                    self.throw_polars_error(e);
+                                }
+                            }
                             if self.entity_country.len() > 0 {
                                 ui.colored_label(
                                     Color32::from_rgb(110, 255, 110),
@@ -153,14 +161,21 @@ impl AppState {
 
                             ui.label("Entity subtype:")
                                 .on_hover_text("Sub-category of the entity.");
-                            ui.add(
-                                AutoCompleteTextEdit::new(
-                                    &mut self.entity_subtype,
-                                    self.database.entity_subtypes(),
-                                )
-                                .max_suggestions(10)
-                                .highlight_matches(true),
-                            );
+                            match self.database.entity_subtypes() {
+                                Ok(entity_subtypes) => {
+                                    ui.add(
+                                        AutoCompleteTextEdit::new(
+                                            &mut self.entity_subtype,
+                                            entity_subtypes,
+                                        )
+                                        .max_suggestions(10)
+                                        .highlight_matches(true),
+                                    );
+                                }
+                                Err(e) => {
+                                    self.throw_polars_error(e);
+                                }
+                            }
                             ui.end_row();
                         });
 
@@ -174,12 +189,18 @@ impl AppState {
                                     self.entity_type.clone(),
                                     self.entity_subtype.clone(),
                                 );
+                                match self.database.insert_entity(&entity) {
+                                    Ok(entity_id) => {
+                                        self.transaction_entity_id = entity_id;
+                                        self.database.save();
+                                        self.clear_entity_fields();
 
-                                self.transaction_entity_id = self.database.insert_entity(&entity);
-                                self.database.save();
-                                self.clear_entity_fields();
-
-                                self.show_input_entity_window = false;
+                                        self.show_input_entity_window = false;
+                                    }
+                                    Err(e) => {
+                                        self.throw_polars_error(e);
+                                    }
+                                }
                             }
                         }
                     });
@@ -225,14 +246,18 @@ impl AppState {
                             ui.end_row();
 
                             ui.label("Account country: ").on_hover_text("Country where the account is based.");
+                            match self.database.account_countries() {
+                                Ok(account_countries) => {
                             ui.add(
                                 AutoCompleteTextEdit::new(
                                     &mut self.account_country,
-                                    self.database.account_countries(),
+                                    account_countries,
                                 )
                                     .max_suggestions(10)
                                     .highlight_matches(true),
-                            );
+                            );}, 
+                                Err(e) => {self.throw_error(e);}
+                            }
                             if self.account_country.len() > 0 {
                                 ui.colored_label(
                                     Color32::from_rgb(110, 255, 110),
@@ -307,11 +332,14 @@ impl AppState {
                                     self.account_initial_balance,
                                 );
 
-                                self.transaction_account_id = self.database.insert_account(&account);
+                                match self.database.insert_account(&account) {
+                                    Ok(account_id) => {
+
+                                self.transaction_account_id = account_id;
                                 self.database.save();
                                 self.clear_account_fields();
 
-                                self.show_input_account_window = false;
+                                self.show_input_account_window = false;}, Err(e) => {self.throw_polars_error(e)}}
                             }
                         }
                     });
@@ -506,11 +534,17 @@ impl AppState {
                                 ui.vertical_centered_justified(|ui| {
                                     if self.party.is_valid() {
                                         if ui.button("Add party").clicked() {
-                                            self.database.insert_party(&mut self.party);
-                                            self.database.save();
-                                            self.clear_fields();
-
-                                            self.show_input_party_window = false;
+                                            match self.database.insert_party(&mut self.party) {
+                                                Ok(_) => {
+                                                    match self.database.save() { 
+                                                        Ok(_) => {
+                                                            self.clear_fields();
+                                                            self.show_input_party_window = false;
+                                                        },
+                                                        Err(e) => {self.throw_error(e);}
+                                                    }}, 
+                                                Err(e) => {self.throw_error(e);}
+                                                }
                                         }
                                     }
                                 });
@@ -525,12 +559,14 @@ impl AppState {
         );
     }
     pub fn handle_show_input_transaction_window(&mut self, ctx: &egui::Context) -> () {
+        match self.database.entity(self.transaction_entity_id) {
+            Ok(transaction_entity) => {
         self.transaction_entity_string =
-            self.database.entity(self.transaction_entity_id).to_string();
-        self.transaction_account_string = self
+            transaction_entity.to_string();}, Err(e) => {self.throw_error(e);}}
+        match self
             .database
-            .account(self.transaction_account_id)
-            .to_string();
+            .account(self.transaction_account_id) { 
+        Ok(account) => {self.transaction_account_string = account.to_string();}, Err(e) => {self.throw_error(e);}}
 
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_transaction_window"),
@@ -615,8 +651,10 @@ impl AppState {
                                 ComboBox::from_id_salt("Transaction account")
                                     .selected_text(format!("{}", self.transaction_account_string))
                                     .show_ui(ui, |ui| {
-                                        for account_id in self.database.iter_account_ids() {
-                                            if self.database.account(account_id).currency()
+                                        match self.database.iter_account_ids() {
+                                            Ok(iterator) => {
+                                        for account_id in iterator {
+                                            if self.database.account(account_id).unwrap().currency()
                                                 == &self.transaction_currency
                                             {
                                                 ui.selectable_value(
@@ -625,12 +663,12 @@ impl AppState {
                                                     format!(
                                                         "{:}",
                                                         self.database
-                                                            .account(account_id)
+                                                            .account(account_id).unwrap()
                                                             .to_string()
                                                     ),
                                                 );
                                             }
-                                        }
+                                        }}, Err(e) => {self.throw_polars_error(e);}}
                                     });
                                 if ui.button("Add new account").clicked() {
                                     self.show_input_account_window = true;
@@ -663,9 +701,11 @@ impl AppState {
                                             self.transaction_entity_popup =
                                                 PopupCloseBehavior::CloseOnClick;
                                         }
-                                        for entity_id in self.database.iter_entity_ids() {
+                                        match self.database.iter_entity_ids() {
+                                            Ok(iterator) => {
+                                        for entity_id in iterator {
                                             let entity_string =
-                                                self.database.entity(entity_id).to_string();
+                                                self.database.entity(entity_id).unwrap().to_string();
 
                                             if entity_string
                                                 .contains(self.transaction_filter.as_str())
@@ -676,7 +716,7 @@ impl AppState {
                                                     format!("{:}", entity_string),
                                                 );
                                             }
-                                        }
+                                        }}, Err(e) => {self.throw_polars_error(e);}}
                                     });
                                 if ui.button("Add new entity").clicked() {
                                     self.show_input_entity_window = true;
@@ -685,15 +725,17 @@ impl AppState {
 
                                 ui.label("Transaction category:")
                                     .on_hover_text("Category of the transaction.");
+                                match self.database.transaction_categories(&self.transaction_type) {
+                                    Ok(transaction_categories) => {
                                 ui.add(
                                     AutoCompleteTextEdit::new(
                                         &mut self.transaction_category,
-                                        self.database
-                                            .transaction_categories(&self.transaction_type),
+                                    
+                                            transaction_categories,
                                     )
                                     .max_suggestions(10)
                                     .highlight_matches(true),
-                                );
+                                );}, Err(e) => {self.throw_polars_error(e);}}
                                 if self.transaction_category.len() > 0 {
                                     ui.colored_label(
                                         Color32::from_rgb(110, 255, 110),
@@ -710,17 +752,20 @@ impl AppState {
 
                                 ui.label("Transaction subcategory:")
                                     .on_hover_text("Subcategory of the transaction.");
+                               match self.database.transaction_subcategories(
+                                            &self.transaction_type,
+                                            self.transaction_category.clone(),
+                                        ) {
+                                   Ok(transaction_subcategories) => {
                                 ui.add(
                                     AutoCompleteTextEdit::new(
                                         &mut self.transaction_subcategory,
-                                        self.database.transaction_subcategories(
-                                            &self.transaction_type,
-                                            self.transaction_category.clone(),
-                                        ),
+                                        transaction_subcategories,
+                                        
                                     )
                                     .max_suggestions(10)
                                     .highlight_matches(true),
-                                );
+                                );}, Err(e) => {self.throw_polars_error(e);}}
                                 ui.end_row();
 
                                 ui.label("Transaction description:")

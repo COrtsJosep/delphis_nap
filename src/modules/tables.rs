@@ -5,6 +5,16 @@ use std::fs::{create_dir, File};
 use std::path::Path;
 use std::str::FromStr;
 use std::vec::IntoIter;
+use std::{error::Error, fmt};
+
+#[derive(Debug, Clone)]
+struct IncorrectTableError;
+impl Error for IncorrectTableError {}
+impl fmt::Display for IncorrectTableError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Attempted to insert transaction into the wrong table!")
+    }
+}
 
 pub trait Table {
     /// Returns the name of the table
@@ -20,66 +30,76 @@ pub trait Table {
     fn create(data_frame: DataFrame) -> Box<Self>;
 
     /// Creates a table instance with zero rows
-    fn new() -> Box<Self>;
+    fn new() -> Result<Box<Self>, PolarsError>;
 
     /// Creates a table instance by trying to load a csv in the right location
-    fn try_load() -> Result<Box<Self>, String> {
-        CsvReadOptions::default()
+    fn try_load() -> Result<Box<Self>, PolarsError> {
+        let data_frame = CsvReadOptions::default()
             .with_infer_schema_length(None)
             .with_has_header(true)
             .with_parse_options(CsvParseOptions::default().with_try_parse_dates(true))
-            .try_into_reader_with_file_path(Some(format!("data/{}_table.csv", Self::name()).into()))
-            .map_err(|e| format!("Failed to read {} table: {}", Self::name(), e))?
-            .finish()
-            .map_err(|e| format!("Failed to load {} table: {}", Self::name(), e))
-            .map(|data_frame| Self::create(data_frame))
+            .try_into_reader_with_file_path(Some(
+                format!("data/{}_table.csv", Self::name()).into(),
+            ))?
+            .finish()?;
+
+        Ok(Self::create(data_frame))
     }
 
     /// Creates a table instance by trying to load the csv data and,
     /// if there is none, by creating an empty one
-    fn init() -> Box<Self> {
-        Self::try_load().unwrap_or_else(|_e| Self::new())
+    fn init() -> Result<Box<Self>, PolarsError> {
+        match Self::try_load() {
+            // tries to load
+            Ok(s) => Ok(s), // if load -> ok
+            Err(_) => match Self::new() {
+                // if not -> try to create new
+                Ok(n) => Ok(n),   // if new -> ok
+                Err(e) => Err(e), // else -> return error
+            },
+        }
     }
 
     /// Saves the table data in the right location
-    fn save(&mut self) -> () {
+    fn save(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.data_frame().is_empty() {
-            return;
+            return Ok(());
         }
 
         let file_name: String = format!("data/{}_table.csv", Self::name());
         let path: &Path = Path::new(&file_name);
-        if !path.parent().expect("path does not have parent").exists() {
-            let _ = create_dir(path.parent().expect("path does not have parents"));
+        let parent: &Path = path.parent().ok_or("Path does not have parent!")?;
+        if !parent.exists() {
+            let _ = create_dir(parent);
         }
 
-        let mut file = File::create(path)
-            .expect(format!("Could not create file {}_table.csv", Self::name()).as_str());
+        let mut file = File::create(path)?;
 
         CsvWriter::new(&mut file)
             .include_header(true)
             .with_separator(b',')
-            .finish(&mut self.mut_data_frame())
-            .expect(format!("Failed to save {} table.", Self::name()).as_str());
+            .finish(&mut self.mut_data_frame())?;
+
+        Ok(())
     }
 
     /// Gets the ID of the last record of the table + 1. If the table is empty,
     /// returns 0
-    fn next_id(&self) -> i64 {
+    fn next_id(&self) -> Result<i64, PolarsError> {
         if self.data_frame().is_empty() {
-            0i64
+            Ok(0i64)
         } else {
             if let AnyValue::Int64(id) = self
                 .data_frame()
-                .column(format!("{}_id", Self::name()).as_str())
-                .expect(format!("Failed to find {}_id column", Self::name()).as_str())
-                .max_reduce()
-                .expect("Failed to generate id")
+                .column(format!("{}_id", Self::name()).as_str())?
+                .max_reduce()?
                 .value()
             {
-                id + 1i64
+                Ok(id + 1i64)
             } else {
-                panic!("Failed to create an integer id")
+                Err(PolarsError::NoData(
+                    format!("Failed to find last {}_id", Self::name()).into(),
+                ))
             }
         }
     }
@@ -111,7 +131,7 @@ impl Table for IncomeTable {
         Box::new(IncomeTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame = DataFrame::new(vec![
             Column::from(Series::new(
                 PlSmallStr::from(format!("{}_id", IncomeTable::name())),
@@ -143,16 +163,19 @@ impl Table for IncomeTable {
                 Vec::<i64>::new(),
             )),
             Column::from(Series::new(PlSmallStr::from("party_id"), Vec::<i64>::new())),
-        ])
-        .expect(format!("Failed to initialize empty {} table", IncomeTable::name()).as_str());
+        ])?;
 
-        IncomeTable::create(data_frame)
+        Ok(IncomeTable::create(data_frame))
     }
 }
 
 impl IncomeTable {
     /// Adds income transaction to the table
-    pub fn insert_transaction(&mut self, transaction: &Transaction, party_id: i64) -> () {
+    pub fn insert_transaction(
+        &mut self,
+        transaction: &Transaction,
+        party_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Transaction::Income {
             value,
             currency,
@@ -163,7 +186,7 @@ impl IncomeTable {
             entity_id,
         } = transaction
         {
-            let id: i64 = self.next_id();
+            let id: i64 = self.next_id()?;
 
             let record = df!(
                     format!("{}_id", IncomeTable::name()) => [id],
@@ -175,157 +198,132 @@ impl IncomeTable {
                     "description" => [description.to_string()],
                     "entity_id" => [*entity_id],
                     "party_id" => [party_id]
-            )
-            .expect(format!("Failed to create {} record", IncomeTable::name()).as_str());
+            )?;
 
-            self.data_frame = self
-                .data_frame()
-                .vstack(&record)
-                .expect("Failed to insert income record")
+            self.data_frame = self.data_frame().vstack(&record)?;
+
+            Ok(())
         } else {
-            panic!("Attempted to insert non-income into the income table");
+            Err(IncorrectTableError.into())
         }
     }
 
-    pub(crate) fn categories(&self) -> Vec<String> {
-        self.data_frame()
-            .column("category")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+    pub(crate) fn categories(&self) -> Result<Vec<String>, PolarsError> {
+        Ok(self
+            .data_frame()
+            .column("category")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 
-    pub(crate) fn subcategories(&self, category: String) -> Vec<String> {
+    pub(crate) fn subcategories(&self, category: String) -> Result<Vec<String>, PolarsError> {
         let mask = self
             .data_frame()
-            .column("category")
-            .unwrap()
-            .str()
-            .unwrap()
+            .column("category")?
+            .str()?
             .equal(category.as_str());
 
-        self.data_frame()
-            .filter(&mask)
-            .unwrap()
-            .column("subcategory")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+        Ok(self
+            .data_frame()
+            .filter(&mask)?
+            .column("subcategory")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 
     /// Deletes records corresponding to a party.
-    pub(crate) fn delete_party(&mut self, party_id: i64) -> () {
+    pub(crate) fn delete_party(&mut self, party_id: i64) -> Result<(), PolarsError> {
         self.data_frame = self
             .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").neq(lit(party_id)))
-            .collect()
-            .unwrap();
+            .collect()?;
+
+        Ok(())
     }
 
     /// Returns iterator of income_ids that correspond to the given party_id
-    pub(crate) fn iter_party(&self, party_id: i64) -> IntoIter<i64> {
-        self.data_frame
+    pub(crate) fn iter_party(&self, party_id: i64) -> Result<IntoIter<i64>, PolarsError> {
+        Ok(self
+            .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").eq(lit(party_id)))
-            .collect()
-            .unwrap()
-            .column(format!("{}_id", IncomeTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .collect()?
+            .column(format!("{}_id", IncomeTable::name()).as_str())?
+            .i64()?
             .into_no_null_iter()
             .collect::<Vec<i64>>()
-            .into_iter()
+            .into_iter())
     }
 
     /// Returns entity given ID
-    pub(crate) fn transaction(&self, id: i64) -> Transaction {
+    pub(crate) fn transaction(&self, id: i64) -> Result<Transaction, Box<dyn std::error::Error>> {
         let mask = self
             .data_frame
-            .column(format!("{}_id", IncomeTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column(format!("{}_id", IncomeTable::name()).as_str())?
+            .i64()?
             .equal(id);
 
-        let record = self.data_frame.filter(&mask).unwrap().clone();
-        let date = record
-            .column("date")
-            .unwrap()
-            .date()
-            .unwrap()
+        let record = self.data_frame.filter(&mask)?.clone();
+        let date: NaiveDate = record
+            .column("date")?
+            .date()?
             .as_date_iter()
             .next()
-            .unwrap()
-            .unwrap()
-            .clone();
+            .ok_or("Could not find date!")?
+            .clone()
+            .ok_or("Could not find date!")?;
 
-        Transaction::Income {
+        let transaction: Transaction = Transaction::Income {
             value: record
-                .column("value")
-                .unwrap()
-                .f64()
-                .unwrap()
+                .column("value")?
+                .f64()?
                 .get(0)
-                .unwrap(),
+                .ok_or("Could not find value!")?,
             currency: Currency::from_str(
                 record
-                    .column("currency")
-                    .unwrap()
-                    .str()
-                    .unwrap()
+                    .column("currency")?
+                    .str()?
                     .get(0)
-                    .unwrap(),
-            )
-            .unwrap(),
+                    .ok_or("Could not find currency!")?,
+            )?,
             date,
             category: record
-                .column("category")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("category")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("Could not find category!")?
                 .to_string(),
             subcategory: record
-                .column("subcategory")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("subcategory")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("Could not find subcategory!")?
                 .to_string(),
             description: record
-                .column("description")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("description")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("Could not find description!")?
                 .to_string(),
             entity_id: record
-                .column("entity_id")
-                .unwrap()
-                .i64()
-                .unwrap()
+                .column("entity_id")?
+                .i64()?
                 .get(0)
-                .unwrap(),
-        }
+                .ok_or("Could not find entity_id!")?,
+        };
+
+        Ok(transaction)
     }
 }
 
@@ -350,7 +348,7 @@ impl Table for ExpensesTable {
         Box::new(ExpensesTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame = DataFrame::new(vec![
             Column::from(Series::new(
                 PlSmallStr::from("expense_id"),
@@ -382,16 +380,19 @@ impl Table for ExpensesTable {
                 Vec::<i64>::new(),
             )),
             Column::from(Series::new(PlSmallStr::from("party_id"), Vec::<i64>::new())),
-        ])
-        .expect("Failed to initialize empty expenses table");
+        ])?;
 
-        ExpensesTable::create(data_frame)
+        Ok(ExpensesTable::create(data_frame))
     }
 }
 
 impl ExpensesTable {
     /// Adds expense transaction to the table
-    pub fn insert_transaction(&mut self, transaction: &Transaction, party_id: i64) -> () {
+    pub fn insert_transaction(
+        &mut self,
+        transaction: &Transaction,
+        party_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Transaction::Expense {
             value,
             currency,
@@ -402,7 +403,7 @@ impl ExpensesTable {
             entity_id,
         } = transaction
         {
-            let id: i64 = self.next_id();
+            let id: i64 = self.next_id()?;
 
             let record = df!(
                 format!("{}_id", ExpensesTable::name()) => [id],
@@ -414,157 +415,126 @@ impl ExpensesTable {
                 "description" => [description.to_string()],
                 "entity_id" => [*entity_id],
                 "party_id" => [party_id]
-            )
-            .expect(format!("Failed to create {} record", ExpensesTable::name()).as_str());
+            )?;
 
-            self.data_frame = self
-                .data_frame
-                .vstack(&record)
-                .expect(format!("Failed to insert {} record", ExpensesTable::name()).as_str())
+            self.data_frame = self.data_frame.vstack(&record)?;
+
+            Ok(())
         } else {
-            panic!("Attempted to insert non-expense into the expenses table");
+            Err(IncorrectTableError.into())
         }
     }
 
-    pub(crate) fn categories(&self) -> Vec<String> {
-        self.data_frame()
-            .column("category")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+    pub(crate) fn categories(&self) -> Result<Vec<String>, PolarsError> {
+        Ok(self
+            .data_frame()
+            .column("category")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 
-    pub(crate) fn subcategories(&self, category: String) -> Vec<String> {
+    pub(crate) fn subcategories(&self, category: String) -> Result<Vec<String>, PolarsError> {
         let mask = self
             .data_frame()
-            .column("category")
-            .unwrap()
-            .str()
-            .unwrap()
+            .column("category")?
+            .str()?
             .equal(category.as_str());
 
-        self.data_frame()
-            .filter(&mask)
-            .unwrap()
-            .column("subcategory")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+        Ok(self
+            .data_frame()
+            .filter(&mask)?
+            .column("subcategory")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 
     // Deletes records corresponding to a party.
-    pub(crate) fn delete_party(&mut self, party_id: i64) -> () {
+    pub(crate) fn delete_party(&mut self, party_id: i64) -> Result<(), PolarsError> {
         self.data_frame = self
             .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").neq(lit(party_id)))
-            .collect()
-            .unwrap();
+            .collect()?;
+
+        Ok(())
     }
 
     /// Returns iterator of expenses_ids that correspond to the given party_id
-    pub(crate) fn iter_party(&self, party_id: i64) -> IntoIter<i64> {
-        self.data_frame
+    pub(crate) fn iter_party(&self, party_id: i64) -> Result<IntoIter<i64>, PolarsError> {
+        Ok(self
+            .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").eq(lit(party_id)))
-            .collect()
-            .unwrap()
-            .column(format!("{}_id", ExpensesTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .collect()?
+            .column(format!("{}_id", ExpensesTable::name()).as_str())?
+            .i64()?
             .into_no_null_iter()
             .collect::<Vec<i64>>()
-            .into_iter()
+            .into_iter())
     }
 
     /// Returns entity given ID
-    pub(crate) fn transaction(&self, id: i64) -> Transaction {
+    pub(crate) fn transaction(&self, id: i64) -> Result<Transaction, Box<dyn std::error::Error>> {
         let mask = self
             .data_frame
-            .column(format!("{}_id", ExpensesTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column(format!("{}_id", ExpensesTable::name()).as_str())?
+            .i64()?
             .equal(id);
 
-        let record = self.data_frame.filter(&mask).unwrap().clone();
+        let record = self.data_frame.filter(&mask)?.clone();
         let date = record
-            .column("date")
-            .unwrap()
-            .date()
-            .unwrap()
+            .column("date")?
+            .date()?
             .as_date_iter()
             .next()
-            .unwrap()
-            .unwrap()
+            .flatten()
+            .ok_or("No date!")?
             .clone();
 
-        Transaction::Expense {
-            value: record
-                .column("value")
-                .unwrap()
-                .f64()
-                .unwrap()
-                .get(0)
-                .unwrap(),
+        Ok(Transaction::Expense {
+            value: record.column("value")?.f64()?.get(0).ok_or("No date!")?,
             currency: Currency::from_str(
                 record
-                    .column("currency")
-                    .unwrap()
-                    .str()
-                    .unwrap()
+                    .column("currency")?
+                    .str()?
                     .get(0)
-                    .unwrap(),
-            )
-            .unwrap(),
+                    .ok_or("No currency!")?,
+            )?,
             date,
             category: record
-                .column("category")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("category")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No category!")?
                 .to_string(),
             subcategory: record
-                .column("subcategory")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("subcategory")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No subcategory!")?
                 .to_string(),
             description: record
-                .column("description")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("description")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No description!")?
                 .to_string(),
             entity_id: record
-                .column("entity_id")
-                .unwrap()
-                .i64()
-                .unwrap()
+                .column("entity_id")?
+                .i64()?
                 .get(0)
-                .unwrap(),
-        }
+                .ok_or("No entity_id!")?,
+        })
     }
 }
 
@@ -589,7 +559,7 @@ impl Table for FundsTable {
         Box::new(FundsTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame = DataFrame::new(vec![
             Column::from(Series::new(
                 PlSmallStr::from(format!("{}_id", FundsTable::name())),
@@ -613,17 +583,20 @@ impl Table for FundsTable {
                 Vec::<i64>::new(),
             )),
             Column::from(Series::new(PlSmallStr::from("party_id"), Vec::<i64>::new())),
-        ])
-        .expect(format!("Failed to initialize empty {} table", FundsTable::name()).as_str());
+        ])?;
 
-        FundsTable::create(data_frame)
+        Ok(FundsTable::create(data_frame))
     }
 }
 
 impl FundsTable {
     /// Adds funds transaction to the table
-    pub fn insert_transaction(&mut self, transaction: &Transaction, party_id: i64) -> () {
-        let id: i64 = self.next_id();
+    pub fn insert_transaction(
+        &mut self,
+        transaction: &Transaction,
+        party_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let id: i64 = self.next_id()?;
 
         if let Transaction::Credit {
             value,
@@ -640,13 +613,11 @@ impl FundsTable {
                 "date" => [*date],
                 "account_id" => [*account_id],
                 "party_id" => [party_id]
-            )
-            .expect("Failed to create credit record");
+            )?;
 
-            self.data_frame = self
-                .data_frame
-                .vstack(&record)
-                .expect("Failed to insert credit record")
+            self.data_frame = self.data_frame.vstack(&record)?;
+
+            Ok(())
         } else if let Transaction::Debit {
             value,
             currency,
@@ -662,123 +633,95 @@ impl FundsTable {
                 "date" => [*date],
                 "account_id" => [*account_id],
                 "party_id" => [party_id]
-            )
-            .expect("Failed to create debit record");
+            )?;
 
-            self.data_frame = self
-                .data_frame
-                .vstack(&record)
-                .expect("Failed to insert debit record")
+            self.data_frame = self.data_frame.vstack(&record)?;
+
+            Ok(())
         } else {
-            panic!(
-                "{}",
-                format!(
-                    "Attempted to insert non-{} into the {} table",
-                    FundsTable::name(),
-                    FundsTable::name()
-                )
-                .as_str()
-            );
+            Err(IncorrectTableError.into())
         }
     }
 
     // Deletes records corresponding to a party.
-    pub(crate) fn delete_party(&mut self, party_id: i64) -> () {
+    pub(crate) fn delete_party(&mut self, party_id: i64) -> Result<(), PolarsError> {
         self.data_frame = self
             .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").neq(lit(party_id)))
-            .collect()
-            .unwrap();
+            .collect()?;
+
+        Ok(())
     }
 
     /// Returns iterator of funds_ids that correspond to the given party_id
-    pub(crate) fn iter_party(&self, party_id: i64) -> IntoIter<i64> {
-        self.data_frame
+    pub(crate) fn iter_party(&self, party_id: i64) -> Result<IntoIter<i64>, PolarsError> {
+        Ok(self
+            .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").eq(lit(party_id)))
-            .collect()
-            .unwrap()
-            .column(format!("{}_id", FundsTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .collect()?
+            .column(format!("{}_id", FundsTable::name()).as_str())?
+            .i64()?
             .into_no_null_iter()
             .collect::<Vec<i64>>()
-            .into_iter()
+            .into_iter())
     }
 
     /// Returns entity given ID
-    pub(crate) fn transaction(&self, id: i64) -> Transaction {
+    pub(crate) fn transaction(&self, id: i64) -> Result<Transaction, Box<dyn std::error::Error>> {
         let mask = self
             .data_frame
-            .column(format!("{}_id", FundsTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column(format!("{}_id", FundsTable::name()).as_str())?
+            .i64()?
             .equal(id);
 
-        let record = self.data_frame.filter(&mask).unwrap().clone();
+        let record = self.data_frame.filter(&mask)?.clone();
         let date = record
-            .column("date")
-            .unwrap()
-            .date()
-            .unwrap()
+            .column("date")?
+            .date()?
             .as_date_iter()
             .next()
-            .unwrap()
-            .unwrap()
+            .flatten()
+            .ok_or("No date!")?
             .clone();
         let transaction_type = record
-            .column(format!("{}_type", FundsTable::name()).as_str())
-            .unwrap()
-            .str()
-            .unwrap()
+            .column(format!("{}_type", FundsTable::name()).as_str())?
+            .str()?
             .get(0)
-            .unwrap()
+            .ok_or(format!("{}_type", FundsTable::name()))?
             .to_string();
-        let value = record
-            .column("value")
-            .unwrap()
-            .f64()
-            .unwrap()
-            .get(0)
-            .unwrap();
+        let value = record.column("value")?.f64()?.get(0).ok_or("No value!")?;
         let currency = Currency::from_str(
             record
-                .column("currency")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("currency")?
+                .str()?
                 .get(0)
-                .unwrap(),
-        )
-        .unwrap();
+                .ok_or("No currency!")?,
+        )?;
         let account_id = record
-            .column("account_id")
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column("account_id")?
+            .i64()?
             .get(0)
-            .unwrap();
+            .ok_or("No account_id!")?;
 
         if transaction_type == String::from("Credit") {
-            Transaction::Credit {
+            Ok(Transaction::Credit {
                 value,
                 currency,
                 date,
                 account_id,
-            }
+            })
         } else {
             // then it is debit
-            Transaction::Debit {
+            Ok(Transaction::Debit {
                 value: -1.0 * value,
                 currency,
                 date,
                 account_id,
-            }
+            })
         }
     }
 }
@@ -804,7 +747,7 @@ impl Table for PartyTable {
         Box::new(PartyTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame = DataFrame::new(vec![
             Column::from(Series::new(
                 PlSmallStr::from(format!("{}_id", PartyTable::name())),
@@ -814,39 +757,37 @@ impl Table for PartyTable {
                 PlSmallStr::from("creation_date"),
                 Vec::<NaiveDate>::new(),
             )),
-        ])
-        .expect(format!("Failed to initialize empty {} table", PartyTable::name()).as_str());
+        ])?;
 
-        PartyTable::create(data_frame)
+        Ok(PartyTable::create(data_frame))
     }
 }
 
 impl PartyTable {
     /// Adds party record to the table
-    pub fn insert_party(&mut self, party: &Party) -> () {
-        let id: i64 = self.next_id();
+    pub fn insert_party(&mut self, party: &Party) -> Result<(), PolarsError> {
+        let id: i64 = self.next_id()?;
 
         let record = df!(
             format!("{}_id", PartyTable::name()) => [id],
             "creation_date" => [party.creation_date]
-        )
-        .expect(format!("Failed to create {} record", PartyTable::name()).as_str());
+        )?;
 
-        self.data_frame = self
-            .data_frame
-            .vstack(&record)
-            .expect(format!("Failed to insert {} record", PartyTable::name()).as_str())
+        self.data_frame = self.data_frame.vstack(&record)?;
+
+        Ok(())
     }
 
     // Deletes records corresponding to a party.
-    pub(crate) fn delete_party(&mut self, party_id: i64) -> () {
+    pub(crate) fn delete_party(&mut self, party_id: i64) -> Result<(), PolarsError> {
         self.data_frame = self
             .data_frame
             .clone()
             .lazy()
             .filter(col("party_id").neq(lit(party_id)))
-            .collect()
-            .unwrap();
+            .collect()?;
+
+        Ok(())
     }
 }
 
@@ -871,38 +812,35 @@ impl Table for EntityTable {
         Box::new(EntityTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame: DataFrame = df!(
             format!("{}_id", EntityTable::name()) => [0i64],
             "name" => ["Unknown"],
             "country" => ["Unknown"],
             format!("{}_type", EntityTable::name()) => [EntityType::default().to_string()],
             format!("{}_subtype", EntityTable::name()) => [""],
-            "creation_date" => [Local::now().date_naive()])
-        .expect(format!("Failed to initialize empty {} table", EntityTable::name()).as_str());
+            "creation_date" => [Local::now().date_naive()])?;
 
-        EntityTable::create(data_frame)
+        Ok(EntityTable::create(data_frame))
     }
 }
 
 impl EntityTable {
     /// Iterator over IDs
-    pub(crate) fn iter(&self) -> IntoIter<i64> {
-        self.data_frame
-            .sort(["name"], Default::default())
-            .unwrap()
-            .column(format!("{}_id", EntityTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+    pub(crate) fn iter(&self) -> Result<IntoIter<i64>, PolarsError> {
+        Ok(self
+            .data_frame
+            .sort(["name"], Default::default())?
+            .column(format!("{}_id", EntityTable::name()).as_str())?
+            .i64()?
             .into_no_null_iter()
             .collect::<Vec<i64>>()
-            .into_iter()
+            .into_iter())
     }
 
     /// Adds entity to the table
-    pub fn insert_entity(&mut self, entity: &Entity) -> i64 {
-        let id: i64 = self.next_id();
+    pub fn insert_entity(&mut self, entity: &Entity) -> Result<i64, PolarsError> {
+        let id: i64 = self.next_id()?;
 
         let record = df!(
             format!("{}_id", EntityTable::name()) => [id],
@@ -911,95 +849,76 @@ impl EntityTable {
             format!("{}_type", EntityTable::name()) => [entity.entity_type().to_string()],
             format!("{}_subtype", EntityTable::name()) => [entity.entity_subtype()],
             "creation_date" => [Local::now().date_naive()]
-        )
-        .expect(format!("Failed to create {} record", EntityTable::name()).as_str());
+        )?;
 
-        self.data_frame = self
-            .data_frame
-            .vstack(&record)
-            .expect(format!("Failed to insert {} record", EntityTable::name()).as_str());
+        self.data_frame = self.data_frame.vstack(&record)?;
 
-        id
+        Ok(id)
     }
 
     /// Returns entity given ID
-    pub(crate) fn entity(&self, id: i64) -> Entity {
+    pub(crate) fn entity(&self, id: i64) -> Result<Entity, Box<dyn std::error::Error>> {
         let mask = self
             .data_frame
-            .column(format!("{}_id", EntityTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column(format!("{}_id", EntityTable::name()).as_str())?
+            .i64()?
             .equal(id);
 
-        let record = self.data_frame.filter(&mask).unwrap();
+        let record = self.data_frame.filter(&mask)?;
 
-        Entity::new(
+        Ok(Entity::new(
             record
-                .column("name")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("name")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No name!")?
                 .to_string(),
             record
-                .column("country")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("country")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No country!")?
                 .to_string(),
             EntityType::from_str(
                 record
-                    .column(format!("{}_type", EntityTable::name()).as_str())
-                    .unwrap()
-                    .str()
-                    .unwrap()
+                    .column(format!("{}_type", EntityTable::name()).as_str())?
+                    .str()?
                     .get(0)
-                    .unwrap(),
-            )
-            .unwrap(),
+                    .ok_or(format!("No {}_type!", EntityTable::name()))?,
+            )?,
             record
-                .column(format!("{}_subtype", EntityTable::name()).as_str())
-                .unwrap()
-                .str()
-                .unwrap()
+                .column(format!("{}_subtype", EntityTable::name()).as_str())?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or(format!("No {}_subtype", EntityTable::name()))?
                 .to_string(),
-        )
+        ))
     }
 
     /// Returns list of unique countries
-    pub(crate) fn countries(&self) -> Vec<String> {
-        self.data_frame()
-            .column("country")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+    pub(crate) fn countries(&self) -> Result<Vec<String>, PolarsError> {
+        Ok(self
+            .data_frame()
+            .column("country")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 
-    pub(crate) fn subtypes(&self) -> Vec<String> {
+    pub(crate) fn subtypes(&self) -> Result<Vec<String>, PolarsError> {
         // filter type?
-        self.data_frame()
-            .column(format!("{}_subtype", EntityTable::name()).as_str())
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+        Ok(self
+            .data_frame()
+            .column(format!("{}_subtype", EntityTable::name()).as_str())?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 }
 pub struct AccountTable {
@@ -1023,7 +942,7 @@ impl Table for AccountTable {
         Box::new(AccountTable { data_frame })
     }
 
-    fn new() -> Box<Self> {
+    fn new() -> Result<Box<Self>, PolarsError> {
         let data_frame: DataFrame = df!(
             format!("{}_id", AccountTable::name()) => [0i64],
             "name" => ["Unknown"],
@@ -1031,31 +950,28 @@ impl Table for AccountTable {
             "currency" => [Currency::default().to_string()],
             format!("{}_type", AccountTable::name()) => [AccountType::default().to_string()],
             "initial_balance" => [0.0f64],
-            "creation_date" => [Local::now().date_naive()])
-        .expect(format!("Failed to initialize empty {} table", AccountTable::name()).as_str());
+            "creation_date" => [Local::now().date_naive()])?;
 
-        AccountTable::create(data_frame)
+        Ok(AccountTable::create(data_frame))
     }
 }
 
 impl AccountTable {
     /// Iterator over IDs
-    pub(crate) fn iter(&self) -> IntoIter<i64> {
-        self.data_frame
-            .sort(["name"], Default::default())
-            .unwrap()
-            .column(format!("{}_id", AccountTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+    pub(crate) fn iter(&self) -> Result<IntoIter<i64>, PolarsError> {
+        Ok(self
+            .data_frame
+            .sort(["name"], Default::default())?
+            .column(format!("{}_id", AccountTable::name()).as_str())?
+            .i64()?
             .into_no_null_iter()
             .collect::<Vec<i64>>()
-            .into_iter()
+            .into_iter())
     }
 
     /// Adds account record to the table
-    pub fn insert_account(&mut self, account: &Account) -> i64 {
-        let id: i64 = self.next_id();
+    pub fn insert_account(&mut self, account: &Account) -> Result<i64, PolarsError> {
+        let id: i64 = self.next_id()?;
 
         let record = df!(
             format!("{}_id", AccountTable::name()) => [id],
@@ -1065,87 +981,67 @@ impl AccountTable {
             format!("{}_type", AccountTable::name()) => [account.account_type().to_string()],
             "initial_balance" => [account.initial_balance()],
             "creation_date" => [Local::now().date_naive()]
-        )
-        .expect(format!("Failed to create {} record", AccountTable::name()).as_str());
+        )?;
 
-        self.data_frame = self
-            .data_frame
-            .vstack(&record)
-            .expect(format!("Failed to insert {} record", AccountTable::name()).as_str());
+        self.data_frame = self.data_frame.vstack(&record)?;
 
-        id
+        Ok(id)
     }
 
     /// Retrieves account from the table, given ID
-    pub(crate) fn account(&self, id: i64) -> Account {
+    pub(crate) fn account(&self, id: i64) -> Result<Account, Box<dyn std::error::Error>> {
         let mask = self
             .data_frame
-            .column(format!("{}_id", AccountTable::name()).as_str())
-            .unwrap()
-            .i64()
-            .unwrap()
+            .column(format!("{}_id", AccountTable::name()).as_str())?
+            .i64()?
             .equal(id);
 
-        let record = self.data_frame.filter(&mask).unwrap();
+        let record = self.data_frame.filter(&mask)?;
 
-        Account::new(
+        Ok(Account::new(
             record
-                .column("name")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("name")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No name!")?
                 .to_string(),
             record
-                .column("country")
-                .unwrap()
-                .str()
-                .unwrap()
+                .column("country")?
+                .str()?
                 .get(0)
-                .unwrap()
+                .ok_or("No country!")?
                 .to_string(),
             Currency::from_str(
                 record
-                    .column("currency")
-                    .unwrap()
-                    .str()
-                    .unwrap()
+                    .column("currency")?
+                    .str()?
                     .get(0)
-                    .unwrap(),
-            )
-            .unwrap(),
+                    .ok_or("No currency!")?,
+            )?,
             AccountType::from_str(
                 record
-                    .column(format!("{}_type", AccountTable::name()).as_str())
-                    .unwrap()
-                    .str()
-                    .unwrap()
+                    .column(format!("{}_type", AccountTable::name()).as_str())?
+                    .str()?
                     .get(0)
-                    .unwrap(),
-            )
-            .unwrap(),
+                    .ok_or(format!("No {}_type!", AccountTable::name()))?,
+            )?,
             record
-                .column("initial_balance")
-                .unwrap()
-                .f64()
-                .unwrap()
+                .column("initial_balance")?
+                .f64()?
                 .get(0)
-                .unwrap(),
-        )
+                .ok_or("No initial_balance!")?,
+        ))
     }
 
-    pub(crate) fn countries(&self) -> Vec<String> {
-        self.data_frame()
-            .column("country")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .str()
-            .unwrap()
+    pub(crate) fn countries(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(self
+            .data_frame()
+            .column("country")?
+            .unique()?
+            .str()?
             .sort(false)
             .into_no_null_iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect())
     }
 }

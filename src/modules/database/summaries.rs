@@ -54,8 +54,8 @@ impl DataBase {
         date_from: NaiveDate,
         date_to: NaiveDate,
         currency_to: &Currency,
-    ) -> f64 {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
+    ) -> Result<f64, Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
 
         let income_table: DataFrame = self
             .incomes_table
@@ -63,42 +63,35 @@ impl DataBase {
             .clone()
             .lazy()
             .filter(col("date").is_between(lit(date_from), lit(date_to), ClosedInterval::Both))
-            .collect()
-            .unwrap();
+            .collect()?;
 
         let mut exchange_rates = Vec::new();
-        let currency_iterator = income_table
-            .column("currency")
-            .unwrap()
-            .str()
-            .unwrap()
-            .into_iter();
+        let currency_iterator = income_table.column("currency")?.str()?.into_iter();
         for currency in currency_iterator {
-            let currency_from =
-                Currency::from_str(currency.unwrap()).expect("Failed to find currency");
+            let currency_from = Currency::from_str(currency.ok_or("Null in currency column!")?)?;
             let exchange_rate: f64 =
-                currency_exchange.exchange_currency(&currency_from, currency_to, date_to);
+                currency_exchange.exchange_currency(&currency_from, currency_to, date_to)?;
             exchange_rates.push(exchange_rate);
         }
 
         let exchange_rates: Series = Series::new("exchange_rate".into(), exchange_rates);
 
-        income_table
+        Ok(income_table
             .lazy()
             .with_column(exchange_rates.lit())
             .with_column((col("exchange_rate") * col("value")).alias(currency_to.to_string()))
-            .collect()
-            .unwrap()
-            .column(currency_to.to_string().as_str())
-            .unwrap()
-            .f64()
-            .unwrap()
+            .collect()?
+            .column(currency_to.to_string().as_str())?
+            .f64()?
             .sum()
-            .unwrap()
+            .ok_or("Sum of empty values?")?)
     }
 
-    pub(crate) fn current_fund_stand(&self, currency_to: Option<&Currency>) -> String {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
+    pub(crate) fn current_fund_stand(
+        &self,
+        currency_to: Option<&Currency>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
 
         let initial_balances: DataFrame = self.account_table.data_frame.clone();
 
@@ -109,8 +102,7 @@ impl DataBase {
             .lazy()
             .group_by(["account_id", "currency"])
             .agg([col("value").sum()])
-            .collect()
-            .expect("Failed to aggregate account values");
+            .collect()?;
 
         let mut summary = initial_balances
             .lazy()
@@ -122,25 +114,19 @@ impl DataBase {
             )
             .with_column(col("value").fill_null(0.0))
             .with_column((col("initial_balance") + col("value")).alias("total_value"))
-            .collect()
-            .expect("Failed to join funds");
+            .collect()?;
 
         if let Some(currency_to) = currency_to {
             let mut exchange_rates = Vec::new();
-            let currency_iterator = summary
-                .column("currency")
-                .unwrap()
-                .str()
-                .unwrap()
-                .into_iter();
+            let currency_iterator = summary.column("currency")?.str()?.into_iter();
             for currency in currency_iterator {
                 let currency_from =
-                    Currency::from_str(currency.unwrap()).expect("Failed to find currency");
+                    Currency::from_str(currency.ok_or("Null value in currency column!")?)?;
                 let exchange_rate: f64 = currency_exchange.exchange_currency(
                     &currency_from,
                     currency_to,
                     Local::now().date_naive(),
-                );
+                )?;
                 exchange_rates.push(exchange_rate);
             }
 
@@ -170,8 +156,7 @@ impl DataBase {
                         name.replace("_", " "),
                     )))
                 })])
-                .collect()
-                .unwrap()
+                .collect()?
         } else {
             summary = summary
                 .clone()
@@ -193,8 +178,7 @@ impl DataBase {
                         name.replace("_", " "),
                     )))
                 })])
-                .collect()
-                .unwrap()
+                .collect()?
         }
 
         data_frame_to_csv_string(&mut summary)
@@ -206,9 +190,9 @@ impl DataBase {
         date_from: NaiveDate,
         date_to: NaiveDate,
         currency_to: &Currency,
-    ) -> String {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
-        let total_income: f64 = self.total_income(date_from, date_to, currency_to);
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
+        let total_income: f64 = self.total_income(date_from, date_to, currency_to)?;
         let num_days: i64 = date_to.signed_duration_since(date_from).num_days();
 
         let expenses_table: DataFrame = self
@@ -217,21 +201,15 @@ impl DataBase {
             .clone()
             .lazy()
             .filter(col("date").is_between(lit(date_from), lit(date_to), ClosedInterval::Both))
-            .collect()
-            .unwrap();
+            .collect()?;
 
         let mut exchange_rates = Vec::new();
-        let currency_iterator = expenses_table
-            .column("currency")
-            .unwrap()
-            .str()
-            .unwrap()
-            .into_iter();
+        let currency_iterator = expenses_table.column("currency")?.str()?.into_iter();
         for currency in currency_iterator {
             let currency_from =
-                Currency::from_str(currency.unwrap()).expect("Failed to find currency");
+                Currency::from_str(currency.ok_or("Null value in currency column!")?)?;
             let exchange_rate: f64 =
-                currency_exchange.exchange_currency(&currency_from, currency_to, date_to);
+                currency_exchange.exchange_currency(&currency_from, currency_to, date_to)?;
             exchange_rates.push(exchange_rate);
         }
 
@@ -264,16 +242,13 @@ impl DataBase {
                     name.replace("_", " "),
                 )))
             })])
-            .collect()
-            .unwrap();
+            .collect()?;
 
         let total_expenses: f64 = summary
-            .column(currency_to.to_string().as_str())
-            .unwrap()
-            .f64()
-            .unwrap()
+            .column(currency_to.to_string().as_str())?
+            .f64()?
             .sum()
-            .unwrap();
+            .ok_or("Sum of null values?")?;
 
         let last_row: DataFrame = df!(
         "Category" => ["Total"],
@@ -282,35 +257,33 @@ impl DataBase {
         format!("{} / Day", currency_to.to_string()).as_str() => [(100.0 * total_expenses / num_days as f64).round() / 100.0],
         "% Total Expenses" => [100.0],
         "% Total Income" => [(100.0 * 100.0 * total_expenses / total_income).round() / 100.0]
-        )
-        .unwrap();
+        )?;
 
-        summary = summary.vstack(&last_row).unwrap();
+        summary = summary.vstack(&last_row)?;
 
         data_frame_to_csv_string(&mut summary)
     }
 
-    pub(crate) fn evolution_table(&self, currency_to: &Currency, time_unit: &TimeUnit) -> String {
-        let currency_exchange: CurrencyExchange = CurrencyExchange::init();
+    pub(crate) fn evolution_table(
+        &self,
+        currency_to: &Currency,
+        time_unit: &TimeUnit,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let currency_exchange: CurrencyExchange = CurrencyExchange::init()?;
         let duration: &str = time_unit.duration();
 
         let expenses_table: DataFrame = self.expenses_table.data_frame.clone();
 
         let mut exchange_rates = Vec::new();
-        let currency_iterator = expenses_table
-            .column("currency")
-            .unwrap()
-            .str()
-            .unwrap()
-            .into_iter();
+        let currency_iterator = expenses_table.column("currency")?.str()?.into_iter();
         for currency in currency_iterator {
             let currency_from =
-                Currency::from_str(currency.unwrap()).expect("Failed to find currency");
+                Currency::from_str(currency.ok_or("Null value in the currency column!")?)?;
             let exchange_rate: f64 = currency_exchange.exchange_currency(
                 &currency_from,
                 currency_to,
                 Local::now().date_naive(),
-            );
+            )?;
             exchange_rates.push(exchange_rate);
         }
 
@@ -332,8 +305,7 @@ impl DataBase {
                 },
             )
             .agg([col(currency_to.to_string()).sum().round(2)])
-            .collect()
-            .expect("Failed to aggregate by time period");
+            .collect()?;
 
         let mut pivoted_summary: DataFrame = pivot_stable(
             &summary,
@@ -343,20 +315,14 @@ impl DataBase {
             true,
             None,
             None,
-        )
-        .expect("Failed to pivot evolution table")
+        )?
         .lazy()
         .sort(["date"], Default::default())
-        .collect()
-        .expect("Failed to finish pivoted evolution table")
-        .upsample::<[String; 0]>([], "date", Duration::parse(duration))
-        .expect("Failed to expand date on pivoted evolution table")
-        .fill_null(FillNullStrategy::Zero)
-        .expect("Failed to fill null values in pivoted evolution table");
+        .collect()?
+        .upsample::<[String; 0]>([], "date", Duration::parse(duration))?
+        .fill_null(FillNullStrategy::Zero)?;
 
-        pivoted_summary
-            .rename("date", PlSmallStr::from_string(time_unit.to_string()))
-            .expect("Failed to rename column");
+        pivoted_summary.rename("date", PlSmallStr::from_string(time_unit.to_string()))?;
 
         data_frame_to_csv_string(&mut pivoted_summary)
     }

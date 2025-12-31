@@ -70,12 +70,20 @@ impl AppState {
                                     if self.is_valid_last_transactions_n() {
                                         if ui.button("Generate!").clicked() {
                                             self.last_transactions_n = self.last_transactions_n_temptative.parse::<usize>().expect("Failed to parse the number of last transactions.");
-                                            self.last_transactions_csv = self.database.last_transactions(self.last_transactions_n);
+                                            match self.database.last_transactions(self.last_transactions_n) {
+                                                Ok(s) => {
+                                                    self.last_transactions_csv = s; 
+                                                    self.last_transactions_csv_correct = true;},
+                                                Err(e) => {
+                                                    self.last_transactions_csv_correct = false; 
+                                                    self.throw_error(e);},
+                                            }
                                         }
                                     }
                                 });
                                 ui.separator();
                             });
+                            if self.last_transactions_csv_correct {
                             strip.cell(|ui| {
                                 TableBuilder::new(ui)
                                     .columns(Column::auto().resizable(true), column_count)
@@ -99,12 +107,17 @@ impl AppState {
                                                         if ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
                                                             let party_id: i64 =
                                                                 element.parse().unwrap();
-                                                            self.party = self.database.party(party_id);
-                                                            self.database.delete_party(party_id);
-                                                            self.database.save();
+                                                            match self.database.party(party_id) {
+                                                                Ok(party) => { 
+                                                                    self.party = party;
+                                                                    self.database.delete_party(party_id);
+                                                                    self.database.save();
 
-                                                            self.show_input_party_window = true;
-                                                            self.show_browse_last_transactions_window = false;
+                                                                    self.show_input_party_window = true;
+                                                                    self.show_browse_last_transactions_window = false;
+                                                                },
+                                                                Err(e) => {self.throw_error(e);}
+                                                            }
                                                         }
                                                     } else {
                                                         ui.label(element);
@@ -118,6 +131,7 @@ impl AppState {
                                 });
                                 ui.separator();
                             });
+                            }
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
@@ -132,6 +146,7 @@ impl AppState {
             self.browse_account_string = self
                 .database
                 .account(self.browse_account_id)
+                .unwrap() // safe due to how it is set
                 .to_string();
             } else {
                 self.browse_account_string = String::from("All accounts");
@@ -190,7 +205,9 @@ impl AppState {
                                                     -1, 
                                                     String::from("All accounts")
                                                 );
-                                                for account_id in self.database.iter_account_ids() {
+                                                match self.database.iter_account_ids() {
+                                                    Ok(iterator) => {
+                                                for account_id in iterator {
                                                     ui.selectable_value(
                                                         &mut self.browse_account_id,
                                                         account_id,
@@ -198,11 +215,13 @@ impl AppState {
                                                             "{:}",
                                                             self.database
                                                             .account(account_id)
+                                                            .unwrap() // safe because we iterate
+                                                                      // over the ids!
                                                             .to_string()
                                                         ),
                                                     );
 
-                                                }
+                                                }}, Err(e) => {self.throw_polars_error(e);}}
                                             });
                                         ui.label("");
                                         ui.end_row();
@@ -215,12 +234,16 @@ impl AppState {
                                                 .last_fund_movements_n_temptative
                                                 .parse::<usize>()
                                                 .expect("Failed to parse the number of last fund_movements.");
-                                            self.last_fund_movements_csv = self.database.last_fund_movements(self.last_fund_movements_n, self.browse_account_id);
+                                            match self.database.last_fund_movements(self.last_fund_movements_n, self.browse_account_id) {
+                                                Ok(s) => {self.last_fund_movements_csv = s; self.last_fund_movements_csv_correct = true;},
+                                                Err(e) => {self.last_fund_movements_csv_correct = false; self.throw_error(e);},
+                                            }
                                         }
                                     }
                                 });
                                 ui.separator();
                             });
+                            if self.last_fund_movements_csv_correct {
                             strip.cell(|ui| {
                                 TableBuilder::new(ui)
                                     .columns(Column::auto().resizable(true), column_count)
@@ -244,12 +267,16 @@ impl AppState {
                                                         if ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
                                                             let party_id: i64 =
                                                                 element.parse().unwrap();
-                                                            self.party = self.database.party(party_id);
+                                                            match self.database.party(party_id) {
+                                                                Ok(party) => {
+                                                            self.party = party;
                                                             self.database.delete_party(party_id);
                                                             self.database.save();
 
                                                             self.show_input_party_window = true;
-                                                            self.show_browse_last_fund_movements_window = false;
+                                                            self.show_browse_last_fund_movements_window = false;},
+                                                            Err(e) => {self.throw_error(e);}
+                                                        }
                                                         }
                                                     } else {
                                                         ui.label(element);
@@ -262,7 +289,7 @@ impl AppState {
                                     }
                                 });
                                 ui.separator();
-                            });
+                            });}
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
