@@ -110,12 +110,18 @@ impl AppState {
                                                             match self.database.party(party_id) {
                                                                 Ok(party) => { 
                                                                     self.party = party;
-                                                                    self.database.delete_party(party_id);
-                                                                    self.database.save();
-
-                                                                    self.show_input_party_window = true;
-                                                                    self.show_browse_last_transactions_window = false;
-                                                                },
+                                                                    match self.database.delete_party(party_id) {
+                                                                        Ok(_) => {
+                                                                            match self.database.save() {
+                                                                                Ok(_) => {
+                                                                                    self.show_input_party_window = true;
+                                                                                    self.show_browse_last_transactions_window = false;
+                                                                                }, 
+                                                                                Err(e) => {self.throw_error(e);}
+                                                                            }} 
+                                                                        Err(e) => {self.throw_polars_error(e);}
+                                                                        }
+                                                                    },
                                                                 Err(e) => {self.throw_error(e);}
                                                             }
                                                         }
@@ -270,11 +276,20 @@ impl AppState {
                                                             match self.database.party(party_id) {
                                                                 Ok(party) => {
                                                             self.party = party;
-                                                            self.database.delete_party(party_id);
-                                                            self.database.save();
+                                                            match self.database.delete_party(party_id) {
+                                                                Ok(_) => {
+                                                                    match self.database.save() {
+                                                                        Ok(_) => {
+                                                                            self.show_input_party_window = true;
+                                                                            self.show_browse_last_fund_movements_window = false;
+                                                                        }, 
+                                                                        Err(e) => {self.throw_error(e);}
+                                                                    }
+                                                                },
+                                                                Err(e) => {self.throw_polars_error(e);},
+                                                            }
 
-                                                            self.show_input_party_window = true;
-                                                            self.show_browse_last_fund_movements_window = false;},
+                                                                },
                                                             Err(e) => {self.throw_error(e);}
                                                         }
                                                         }

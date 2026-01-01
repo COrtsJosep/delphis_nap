@@ -175,7 +175,7 @@ impl CurrencyExchange {
             hash_map_raw,
             hash_map,
         };
-        currency_exchange.save();
+        currency_exchange.save()?;
 
         Ok(currency_exchange)
     }

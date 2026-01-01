@@ -7,10 +7,10 @@ mod tests {
 
     #[test]
     fn correct_insert_party() {
-        let mut data_base: DataBase = DataBase::new();
+        let mut data_base: DataBase = DataBase::new().unwrap();
         let mut party: Party = init_party();
 
-        data_base.insert_party(&mut party);
+        let _ = data_base.insert_party(&mut party);
 
         let expected_result = df!(
                 "table" => ["income", "expenses", "funds", "party", "entity", "account"],
@@ -18,14 +18,14 @@ mod tests {
         )
         .unwrap();
 
-        let actual_result = data_base.size();
+        let actual_result = data_base.size().unwrap();
 
         assert!(actual_result.equals(&expected_result));
     }
 
     #[test]
     fn correct_insert_entity_account() {
-        let mut data_base: DataBase = DataBase::new();
+        let mut data_base: DataBase = DataBase::new().unwrap();
         let entity = Entity::new(
             String::from("Aldi"),
             String::from("Germany"),
@@ -41,8 +41,8 @@ mod tests {
             1080.0f64,
         );
 
-        data_base.insert_entity(&entity);
-        data_base.insert_account(&account);
+        let _ = data_base.insert_entity(&entity);
+        let _ = data_base.insert_account(&account);
 
         let expected_result = df!(
                 "table" => ["income", "expenses", "funds", "party", "entity", "account"],
@@ -50,7 +50,7 @@ mod tests {
         )
         .unwrap();
 
-        let actual_result = data_base.size();
+        let actual_result = data_base.size().unwrap();
 
         assert!(actual_result.equals(&expected_result));
     }

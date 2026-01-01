@@ -192,10 +192,11 @@ impl AppState {
                                 match self.database.insert_entity(&entity) {
                                     Ok(entity_id) => {
                                         self.transaction_entity_id = entity_id;
-                                        self.database.save();
+                                        match self.database.save() {
+                                            Ok(_) => {
                                         self.clear_entity_fields();
 
-                                        self.show_input_entity_window = false;
+                                        self.show_input_entity_window = false;}, Err(e) => {self.throw_error(e);}}
                                     }
                                     Err(e) => {
                                         self.throw_polars_error(e);
@@ -336,10 +337,12 @@ impl AppState {
                                     Ok(account_id) => {
 
                                 self.transaction_account_id = account_id;
-                                self.database.save();
+                                match self.database.save(){
+                                    Ok(_) => {
                                 self.clear_account_fields();
 
-                                self.show_input_account_window = false;}, Err(e) => {self.throw_polars_error(e)}}
+                                self.show_input_account_window = false;}, Err(e) => {self.throw_error(e);}}
+                                    }, Err(e) => {self.throw_polars_error(e)}}
                             }
                         }
                     });

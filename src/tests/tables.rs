@@ -25,14 +25,14 @@ mod tests {
 
     #[test]
     fn correct_funds_table_init() {
-        let funds_table: Box<FundsTable> = FundsTable::new();
+        let funds_table: Box<FundsTable> = FundsTable::new().unwrap();
 
         assert!(funds_table.data_frame.is_empty());
     }
 
     #[test]
     fn correct_id_empty_funds_table_init() {
-        let mut funds_table: FundsTable = *FundsTable::new();
+        let mut funds_table: FundsTable = *FundsTable::new().unwrap();
 
         let transaction = Transaction::Debit {
             value: 300.0,
@@ -41,7 +41,7 @@ mod tests {
             account_id: 0i64,
         };
 
-        funds_table.insert_transaction(&transaction, 0);
+        let _ = funds_table.insert_transaction(&transaction, 0);
 
         let binding = funds_table
             .data_frame()
@@ -65,7 +65,7 @@ mod tests {
             account_id: 0i64,
         };
 
-        funds_table.insert_transaction(&transaction, 0);
+        let _ = funds_table.insert_transaction(&transaction, 0);
 
         let binding = funds_table
             .data_frame()
@@ -81,14 +81,14 @@ mod tests {
 
     #[test]
     fn correct_entity_table_init() {
-        let entity_table: EntityTable = *EntityTable::new();
+        let entity_table: EntityTable = *EntityTable::new().unwrap();
 
         assert_eq!(entity_table.data_frame.height(), 1);
     }
 
     #[test]
     fn correct_id_empty_entity_table_init() {
-        let mut entity_table: EntityTable = *EntityTable::new();
+        let mut entity_table: EntityTable = *EntityTable::new().unwrap();
 
         let entity = Entity::new(
             String::from("Aldi"),
@@ -97,7 +97,7 @@ mod tests {
             String::from("Supermarket"),
         );
 
-        entity_table.insert_entity(&entity);
+        let _ = entity_table.insert_entity(&entity);
 
         let binding = entity_table
             .data_frame()
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn correct_id_empty_account_table_init() {
-        let mut account_table: AccountTable = *AccountTable::new();
+        let mut account_table: AccountTable = *AccountTable::new().unwrap();
 
         let account = Account::new(
             String::from("Current account"),
@@ -123,7 +123,7 @@ mod tests {
             1080.0f64,
         );
 
-        account_table.insert_account(&account);
+        let _ = account_table.insert_account(&account);
 
         let binding = account_table
             .data_frame()
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn correct_income_table_delete() {
-        let mut income_table = *IncomeTable::init();
+        let mut income_table = *IncomeTable::init().unwrap();
         let orig_size = income_table.data_frame.size();
         let party_0_size = income_table
             .data_frame
@@ -149,14 +149,14 @@ mod tests {
             .collect()
             .unwrap()
             .size();
-        income_table.delete_party(0);
+        let _ = income_table.delete_party(0);
 
         assert_eq!(orig_size - party_0_size, income_table.data_frame.size())
     }
 
     #[test]
     fn correct_income_table_transaction() {
-        let mut income_table = *IncomeTable::new();
+        let mut income_table = *IncomeTable::new().unwrap();
         let original_transaction = Transaction::Income {
             value: 0.0,
             currency: Currency::EUR,
@@ -166,8 +166,8 @@ mod tests {
             description: String::from("Test description"),
             entity_id: 0,
         };
-        income_table.insert_transaction(&original_transaction, 0);
-        let returned_transaction = income_table.transaction(0);
+        let _ = income_table.insert_transaction(&original_transaction, 0);
+        let returned_transaction = income_table.transaction(0).unwrap();
 
         assert!(
             (original_transaction.value() == returned_transaction.value())
