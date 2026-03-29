@@ -692,18 +692,9 @@ impl AppState {
                                     .on_hover_text("Entity with whom the transaction is made.");
                                 containers::ComboBox::from_id_salt("Transaction entity")
                                     .selected_text(format!("{}", self.transaction_entity_string))
-                                    .close_behavior(self.transaction_entity_popup)
+                                    .close_behavior(PopupCloseBehavior::CloseOnClick)
                                     .show_ui(ui, |ui| {
-                                        if ui
-                                            .text_edit_singleline(&mut self.transaction_filter)
-                                            .has_focus()
-                                        {
-                                            self.transaction_entity_popup =
-                                                PopupCloseBehavior::IgnoreClicks;
-                                        } else {
-                                            self.transaction_entity_popup =
-                                                PopupCloseBehavior::CloseOnClick;
-                                        }
+                                        ui.text_edit_singleline(&mut self.transaction_filter).request_focus();
                                         match self.database.iter_entity_ids() {
                                             Ok(iterator) => {
                                         for entity_id in iterator {

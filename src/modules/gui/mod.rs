@@ -11,7 +11,6 @@ use crate::modules::financial::*;
 use chrono::{Local, NaiveDate};
 use derivative::*;
 use eframe::egui;
-use egui::PopupCloseBehavior;
 use egui_extras::{Size, StripBuilder};
 
 const WINDOW_HEIGHT: f32 = 400.0;
@@ -65,8 +64,6 @@ pub struct AppState {
     transaction_account_string: String,
     transaction_type: TransactionType,
     transaction_filter: String,
-    #[derivative(Default(value = "PopupCloseBehavior::IgnoreClicks"))]
-    transaction_entity_popup: PopupCloseBehavior,
 
     expense_summary_csv: String,
     expense_summary_csv_correct: bool,
