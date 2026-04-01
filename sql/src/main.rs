@@ -1,4 +1,5 @@
 pub mod financial_database;
+pub mod table_records;
 use crate::financial_database::FinancialDataBase;
 
 #[tokio::main]
