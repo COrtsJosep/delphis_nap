@@ -1,8 +1,11 @@
 pub mod financial_database;
 use crate::financial_database::FinancialDataBase;
 
-fn main() {
-    println!("Hello, world!");
-
-    let financial_data_base = FinancialDataBase::new();
+#[tokio::main]
+async fn main() {
+    let financial_data_base = FinancialDataBase::init().await;
+    match financial_data_base {
+        Ok(_e) => (),
+        Err(e) => println!("{:}", e),
+    }
 }

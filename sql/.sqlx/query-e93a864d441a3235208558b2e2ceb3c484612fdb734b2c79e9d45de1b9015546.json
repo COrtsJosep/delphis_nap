@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists parties (\n\tparty_id integer primary key,\n\tcreation_date text not null\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "e93a864d441a3235208558b2e2ceb3c484612fdb734b2c79e9d45de1b9015546"
+}
