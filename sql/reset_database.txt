@@ -1,0 +1,7 @@
+rm data/financial_database.sqlite
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_party_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_account_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_entity_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_expense_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_income_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_fund_movement_table.sql

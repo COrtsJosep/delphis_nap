@@ -8,3 +8,6 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 csv = "1.4.0"
+chrono = "0.4.44"
+strum_macros = "0.28.0"
+strum = "0.28.0"

@@ -59,7 +59,7 @@ pub(crate) struct IncomeRecord {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct Party {
+pub(crate) struct PartyRecord {
     pub party_id: u32,
     pub creation_date: String,
 }
