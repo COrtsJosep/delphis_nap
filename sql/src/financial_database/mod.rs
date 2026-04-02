@@ -1,11 +1,12 @@
-use crate::table_records::*;
 use crate::financial::*;
+use crate::table_records::*;
 use sqlx::sqlite::SqliteConnection;
 use sqlx::Connection;
 use std::path::Path;
 use tokio::fs;
 
 const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
+const DATE_FORMAT: &str = "%Y-%m-%d";
 
 pub struct FinancialDataBase {
     connection: SqliteConnection,
@@ -46,17 +47,14 @@ impl FinancialDataBase {
             let mut reader = csv::Reader::from_path(account_table_path).unwrap();
             for result in reader.deserialize() {
                 let account_record: AccountRecord = result.unwrap();
-                sqlx::query!(
-                    r#"
-                    insert into accounts 
-                    (account_id, name, country, currency, account_type, initial_balance, creation_date) 
-                    values (?, ?, ?, ?, ?, ?, ?)"#,
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_accounts.sql",
                     account_record.account_id,
                     account_record.name,
-                    account_record.country, 
-                    account_record.currency, 
-                    account_record.account_type, 
-                    account_record.initial_balance, 
+                    account_record.country,
+                    account_record.currency,
+                    account_record.account_type,
+                    account_record.initial_balance,
                     account_record.creation_date,
                 )
                 .execute(&mut connection)
@@ -69,12 +67,8 @@ impl FinancialDataBase {
             let mut reader = csv::Reader::from_path(entity_table_path).unwrap();
             for result in reader.deserialize() {
                 let entity_record: EntityRecord = result.unwrap();
-                sqlx::query!(
-                    r#"
-                    insert into entities
-                    (entity_id, name, country, entity_type, entity_subtype, creation_date)
-                    values (?, ?, ?, ?, ?, ?)
-                    "#,
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_entities.sql",
                     entity_record.entity_id,
                     entity_record.name,
                     entity_record.country,
@@ -87,100 +81,84 @@ impl FinancialDataBase {
             }
         }
 
-		let party_table_path = Path::new("data/party_table.csv");
-		if party_table_path.exists() {
-		    let mut reader = csv::Reader::from_path(party_table_path).unwrap();
-		    for result in reader.deserialize() {
-			    let record: PartyRecord = result.unwrap();
-			    sqlx::query!(
-			        r#"
-			        insert into parties
-			        (party_id, creation_date)
-			        values (?, ?)
-			        "#,
-			        record.party_id,
-			        record.creation_date,
-			    )
-			    .execute(&mut connection)
-			    .await?;
-		    }
-		}
+        let party_table_path = Path::new("data/party_table.csv");
+        if party_table_path.exists() {
+            let mut reader = csv::Reader::from_path(party_table_path).unwrap();
+            for result in reader.deserialize() {
+                let record: PartyRecord = result.unwrap();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_parties.sql",
+                    record.party_id,
+                    record.creation_date,
+                )
+                .execute(&mut connection)
+                .await?;
+            }
+        }
 
-		let expense_table_path = Path::new("data/expense_table.csv");
-		if expense_table_path.exists() {
-		    let mut reader = csv::Reader::from_path(expense_table_path).unwrap();
-		    for result in reader.deserialize() {
-			    let expense_record: ExpenseRecord = result.expect("Crashed here");
-			    sqlx::query!(
-			        r#"
-			        insert into expenses
-			        (expense_id, value, currency, date, category, subcategory, description, entity_id, party_id)
-			        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			        "#,
-			        expense_record.expense_id,
-			        expense_record.value,
-			        expense_record.currency,
-			        expense_record.date,
-			        expense_record.category,
-			        expense_record.subcategory,
-			        expense_record.description,
-			        expense_record.entity_id,
-			        expense_record.party_id,
-			    )
-			    .execute(&mut connection)
-			    .await?;
-		    }
-		}
+        let expense_table_path = Path::new("data/expense_table.csv");
+        if expense_table_path.exists() {
+            let mut reader = csv::Reader::from_path(expense_table_path).unwrap();
+            for result in reader.deserialize() {
+                let expense_record: ExpenseRecord = result.unwrap();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_expenses.sql",
+                    expense_record.expense_id,
+                    expense_record.value,
+                    expense_record.currency,
+                    expense_record.date,
+                    expense_record.category,
+                    expense_record.subcategory,
+                    expense_record.description,
+                    expense_record.entity_id,
+                    expense_record.party_id,
+                )
+                .execute(&mut connection)
+                .await?;
+            }
+        }
 
-		let fund_movement_table_path = Path::new("data/fund_movement_table.csv");
-		if fund_movement_table_path.exists() {
-		    let mut reader = csv::Reader::from_path(fund_movement_table_path).unwrap();
-		    for result in reader.deserialize() {
-			    let record: FundMovementRecord = result.unwrap();
-		    	sqlx::query!(
-			        r#"
-			        insert into fund_movements
-			        (fund_movement_id, fund_movement_type, value, currency, date, account_id, party_id)
-			        values (?, ?, ?, ?, ?, ?, ?)
-			        "#,
-			        record.fund_movement_id,
-			        record.fund_movement_type,
-			        record.value,
-			        record.currency,
-			        record.date,
-			        record.account_id,
-			        record.party_id,
-			    )
-			    .execute(&mut connection)
-			    .await?;
-		    }
-		}
+        let fund_movement_table_path = Path::new("data/fund_movement_table.csv");
+        if fund_movement_table_path.exists() {
+            let mut reader = csv::Reader::from_path(fund_movement_table_path).unwrap();
+            for result in reader.deserialize() {
+                let record: FundMovementRecord = result.unwrap();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_fund_movements.sql",
+                    record.fund_movement_id,
+                    record.fund_movement_type,
+                    record.value,
+                    record.currency,
+                    record.date,
+                    record.account_id,
+                    record.party_id,
+                )
+                .execute(&mut connection)
+                .await?;
+            }
+        }
 
-		let income_table_path = Path::new("data/income_table.csv");
-		if income_table_path.exists() {
-		    let mut reader = csv::Reader::from_path(income_table_path).unwrap();
-		    for result in reader.deserialize() {
-			    let record: IncomeRecord = result.unwrap();
-			    sqlx::query!(
-			        r#"
-			        insert into incomes
-			        (income_id, value, currency, date, category, subcategory, description, entity_id, party_id)
-			        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			        "#,
-			        record.income_id,
-			        record.value,
-			        record.currency,
-			        record.date,
-			        record.category,
-			        record.subcategory,
-			        record.description,
-			        record.entity_id,
-			        record.party_id,
-			    )
-			    .execute(&mut connection)
-			    .await?;
-		    }
-		}
+        let income_table_path = Path::new("data/income_table.csv");
+        if income_table_path.exists() {
+            let mut reader = csv::Reader::from_path(income_table_path).unwrap();
+            for result in reader.deserialize() {
+                let record: IncomeRecord = result.unwrap();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_incomes.sql",
+                    record.income_id,
+                    record.value,
+                    record.currency,
+                    record.date,
+                    record.category,
+                    record.subcategory,
+                    record.description,
+                    record.entity_id,
+                    record.party_id,
+                )
+                .execute(&mut connection)
+                .await?;
+            }
+        }
 
         Ok(FinancialDataBase { connection })
     }
@@ -208,18 +186,18 @@ impl FinancialDataBase {
             .fetch_one(&mut self.connection)
             .await;
         let party_id: i64 = match query_result {
-            Ok(id) => id.max_party_id.unwrap(),
+            Ok(id) => id.max_party_id.unwrap() + 1i64,
             Err(_e) => 0i64,
         };
 
-        let party_creation_date: String = party.creation_date.format("%Y-%m-%d").to_string();
-        sqlx::query!(
-                "insert into parties (party_id, creation_date) values (?, ?)", 
-                party_id, 
-                party_creation_date
-            )
-            .execute(&mut self.connection)
-            .await?;
+        let party_creation_date: String = party.creation_date.format(DATE_FORMAT).to_string();
+        sqlx::query_file!(
+            "src/queries/insertion/insert_into_parties.sql",
+            party_id,
+            party_creation_date
+        )
+        .execute(&mut self.connection)
+        .await?;
 
         for transaction in party.iter() {
             self.insert_transaction(&transaction, party_id).await?;
@@ -228,15 +206,143 @@ impl FinancialDataBase {
         Ok(())
     }
 
+    // sorry for the long method
     async fn insert_transaction(
         &mut self,
         transaction: &Transaction,
         party_id: i64,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query!("insert into parties (party_id, creation_date) values (2, '2020-02-02')")
-            .execute(&mut self.connection)
-            .await?;
-
+        match transaction {
+            Transaction::Expense {
+                value,
+                currency,
+                date,
+                category,
+                subcategory,
+                description,
+                entity_id,
+            } => {
+                let query_result =
+                    sqlx::query!("select max(expense_id) as max_expense_id from expenses")
+                        .fetch_one(&mut self.connection)
+                        .await;
+                let expense_id: i64 = match query_result {
+                    Ok(id) => id.max_expense_id.unwrap() + 1i64,
+                    Err(_e) => 0i64,
+                };
+                let expense_date: String = date.format(DATE_FORMAT).to_string();
+                let expense_currency: String = currency.to_string();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_expenses.sql",
+                    expense_id,
+                    value,
+                    expense_currency,
+                    expense_date,
+                    category,
+                    subcategory,
+                    description,
+                    entity_id,
+                    party_id,
+                )
+                .execute(&mut self.connection)
+                .await?;
+            }
+            Transaction::Income {
+                value,
+                currency,
+                date,
+                category,
+                subcategory,
+                description,
+                entity_id,
+            } => {
+                let query_result =
+                    sqlx::query!("select max(income_id) as max_income_id from incomes")
+                        .fetch_one(&mut self.connection)
+                        .await;
+                let income_id: i64 = match query_result {
+                    Ok(id) => id.max_income_id.unwrap() + 1i64,
+                    Err(_e) => 0i64,
+                };
+                let income_date: String = date.format(DATE_FORMAT).to_string();
+                let income_currency: String = currency.to_string();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_incomes.sql",
+                    income_id,
+                    value,
+                    income_currency,
+                    income_date,
+                    category,
+                    subcategory,
+                    description,
+                    entity_id,
+                    party_id,
+                )
+                .execute(&mut self.connection)
+                .await?;
+            }
+            Transaction::Credit {
+                value,
+                currency,
+                date,
+                account_id,
+            } => {
+                let query_result = sqlx::query!(
+                    "select max(fund_movement_id) as max_fund_movement_id from fund_movements"
+                )
+                .fetch_one(&mut self.connection)
+                .await;
+                let fund_movement_id: i64 = match query_result {
+                    Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
+                    Err(_e) => 0i64,
+                };
+                let fund_movement_date: String = date.format(DATE_FORMAT).to_string();
+                let fund_movement_currency: String = currency.to_string();
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_fund_movements.sql",
+                    fund_movement_id,
+                    "Credit",
+                    value,
+                    fund_movement_currency,
+                    fund_movement_date,
+                    account_id,
+                    party_id,
+                )
+                .execute(&mut self.connection)
+                .await?;
+            }
+            Transaction::Debit {
+                value,
+                currency,
+                date,
+                account_id,
+            } => {
+                let query_result = sqlx::query!(
+                    "select max(fund_movement_id) as max_fund_movement_id from fund_movements"
+                )
+                .fetch_one(&mut self.connection)
+                .await;
+                let fund_movement_id: i64 = match query_result {
+                    Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
+                    Err(_e) => 0i64,
+                };
+                let fund_movement_date: String = date.format(DATE_FORMAT).to_string();
+                let fund_movement_currency: String = currency.to_string();
+                let fund_movement_value: f64 = -1.0 * value;
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_fund_movements.sql",
+                    fund_movement_id,
+                    "Debit",
+                    fund_movement_value,
+                    fund_movement_currency,
+                    fund_movement_date,
+                    account_id,
+                    party_id,
+                )
+                .execute(&mut self.connection)
+                .await?;
+            }
+        }
         Ok(())
     }
 }
