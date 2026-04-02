@@ -1,9 +1,11 @@
 use crate::financial::*;
 use crate::table_records::*;
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use sqlx::sqlite::SqliteConnection;
 use sqlx::Connection;
 use std::path::Path;
+use std::str::FromStr;
+use std::vec::IntoIter;
 use tokio::fs;
 
 const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
@@ -18,7 +20,7 @@ impl FinancialDataBase {
         let financial_database_path_str = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
         let financial_database_path = Path::new(financial_database_path_str);
 
-        fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
+        //fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
         let mut connection = SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?;
 
@@ -410,5 +412,209 @@ impl FinancialDataBase {
             }
         }
         Ok(())
+    }
+
+    pub(crate) async fn iter_entity_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
+        let rows = sqlx::query!("select entity_id from entities")
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        let entity_ids: Vec<i64> = rows.into_iter().map(|r| r.entity_id).collect();
+        Ok(entity_ids.into_iter())
+    }
+
+    pub(crate) async fn entity(&mut self, entity_id: i64) -> Result<Entity, sqlx::Error> {
+        let row = sqlx::query!("select * from entities where entity_id = ?", entity_id)
+            .fetch_one(&mut self.connection)
+            .await?;
+
+        let entity: Entity = Entity::new(
+            row.name,
+            row.country,
+            EntityType::from_str(row.entity_type.as_str()).unwrap(),
+            row.entity_subtype,
+        );
+
+        Ok(entity)
+    }
+
+    pub(crate) async fn entity_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
+        let rows = sqlx::query!("select distinct country from entities order by country")
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        let entity_countries = rows.into_iter().map(|r| r.country).collect();
+        Ok(entity_countries)
+    }
+
+    pub(crate) async fn entity_subtypes(&mut self) -> Result<Vec<String>, sqlx::Error> {
+        let rows =
+            sqlx::query!("select distinct entity_subtype from entities order by entity_subtype")
+                .fetch_all(&mut self.connection)
+                .await?;
+
+        let entity_subtypes = rows.into_iter().map(|r| r.entity_subtype).collect();
+        Ok(entity_subtypes)
+    }
+
+    pub(crate) async fn iter_account_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
+        let rows = sqlx::query!("select account_id from accounts")
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        let account_ids: Vec<i64> = rows.into_iter().map(|r| r.account_id).collect();
+        Ok(account_ids.into_iter())
+    }
+
+    pub(crate) async fn account(&mut self, account_id: i64) -> Result<Account, sqlx::Error> {
+        let row = sqlx::query!("select * from accounts where account_id = ?", account_id)
+            .fetch_one(&mut self.connection)
+            .await?;
+
+        let account: Account = Account::new(
+            row.name,
+            row.country,
+            Currency::from_str(row.currency.as_str()).unwrap(),
+            AccountType::from_str(row.account_type.as_str()).unwrap(),
+            row.initial_balance,
+        );
+
+        Ok(account)
+    }
+
+    pub(crate) async fn account_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
+        let rows = sqlx::query!("select distinct country from accounts order by country")
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        let account_countries = rows.into_iter().map(|r| r.country).collect();
+        Ok(account_countries)
+    }
+
+    pub(crate) async fn transaction_categories(
+        &mut self,
+        transaction_type: &TransactionType,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let transaction_categories = match transaction_type {
+            TransactionType::Income => {
+                let rows = sqlx::query!("select distinct category from incomes order by category")
+                    .fetch_all(&mut self.connection)
+                    .await?;
+                rows.into_iter().map(|r| r.category).collect()
+            }
+            TransactionType::Expense => {
+                let rows = sqlx::query!("select distinct category from expenses order by category")
+                    .fetch_all(&mut self.connection)
+                    .await?;
+                rows.into_iter().map(|r| r.category).collect()
+            }
+            _ => Vec::new(), // Should never happen for Credit/Debit
+        };
+
+        Ok(transaction_categories)
+    }
+
+    pub(crate) async fn transaction_subcategories(
+        &mut self,
+        transaction_type: &TransactionType,
+        category: String,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let transaction_subcategories = match transaction_type {
+            TransactionType::Income => {
+                let rows = sqlx::query!(
+                        "select distinct subcategory from incomes where category = ? order by subcategory", 
+                        category
+                    )
+                    .fetch_all(&mut self.connection)
+                    .await?;
+                rows.into_iter().map(|r| r.subcategory).collect()
+            }
+            TransactionType::Expense => {
+                let rows = sqlx::query!(
+                        "select distinct subcategory from expenses where category = ? order by subcategory", 
+                        category
+                    )
+                    .fetch_all(&mut self.connection)
+                    .await?;
+                rows.into_iter().map(|r| r.subcategory).collect()
+            }
+            _ => Vec::new(), // Should never happen for Credit/Debit
+        };
+
+        Ok(transaction_subcategories)
+    }
+
+    async fn transaction(
+        &mut self,
+        transaction_type: TransactionType,
+        transaction_id: i64,
+    ) -> Result<Transaction, sqlx::Error> {
+        let transaction = match transaction_type {
+            TransactionType::Expense => {
+                let row = sqlx::query!(
+                    "select * from expenses where expense_id = ?",
+                    transaction_id
+                )
+                .fetch_one(&mut self.connection)
+                .await?;
+
+                Transaction::Expense {
+                    value: row.value,
+                    currency: Currency::from_str(row.currency.as_str()).unwrap(),
+                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    category: row.category,
+                    subcategory: row.subcategory,
+                    description: row.description,
+                    entity_id: row.entity_id,
+                }
+            }
+            TransactionType::Income => {
+                let row = sqlx::query!("select * from incomes where income_id = ?", transaction_id)
+                    .fetch_one(&mut self.connection)
+                    .await?;
+
+                Transaction::Income {
+                    value: row.value,
+                    currency: Currency::from_str(row.currency.as_str()).unwrap(),
+                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    category: row.category,
+                    subcategory: row.subcategory,
+                    description: row.description,
+                    entity_id: row.entity_id,
+                }
+            }
+            TransactionType::Credit => {
+                let row = sqlx::query!(
+                    "select * from fund_movements where fund_movement_id = ?",
+                    transaction_id
+                )
+                .fetch_one(&mut self.connection)
+                .await?;
+
+                Transaction::Credit {
+                    value: row.value,
+                    currency: Currency::from_str(row.currency.as_str()).unwrap(),
+                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    account_id: row.account_id,
+                }
+            }
+            TransactionType::Debit => {
+                let row = sqlx::query!(
+                    "select * from fund_movements where fund_movement_id = ?",
+                    transaction_id
+                )
+                .fetch_one(&mut self.connection)
+                .await?;
+
+                Transaction::Debit {
+                    value: -1.0 * row.value,
+                    currency: Currency::from_str(row.currency.as_str()).unwrap(),
+                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    account_id: row.account_id,
+                }
+            }
+        };
+
+        Ok(transaction)
     }
 }
