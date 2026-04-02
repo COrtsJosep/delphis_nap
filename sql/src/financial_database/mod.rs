@@ -1,5 +1,6 @@
 use crate::financial::*;
 use crate::table_records::*;
+use chrono::Local;
 use sqlx::sqlite::SqliteConnection;
 use sqlx::Connection;
 use std::path::Path;
@@ -179,6 +180,71 @@ impl FinancialDataBase {
         }
 
         // TODO: currency exchange tables
+    }
+
+    pub(crate) async fn insert_account(
+        &mut self,
+        account: &mut Account,
+    ) -> Result<(), sqlx::Error> {
+        let query_result = sqlx::query!("select max(account_id) as max_account_id from accounts")
+            .fetch_one(&mut self.connection)
+            .await;
+        let account_id: i64 = match query_result {
+            Ok(id) => id.max_account_id.unwrap() + 1i64,
+            Err(_e) => 0i64,
+        };
+
+        let account_name: String = account.name();
+        let account_country: String = account.country();
+        let account_currency: String = account.currency().to_string();
+        let account_type: String = account.account_type().to_string();
+        let account_initial_balance: f64 = account.initial_balance();
+        let account_creation_date: String =
+            Local::now().date_naive().format(DATE_FORMAT).to_string();
+        sqlx::query_file!(
+            "src/queries/insertion/insert_into_accounts.sql",
+            account_id,
+            account_name,
+            account_country,
+            account_currency,
+            account_type,
+            account_initial_balance,
+            account_creation_date,
+        )
+        .execute(&mut self.connection)
+        .await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn insert_entity(&mut self, entity: &mut Entity) -> Result<(), sqlx::Error> {
+        let query_result = sqlx::query!("select max(entity_id) as max_entity_id from entities")
+            .fetch_one(&mut self.connection)
+            .await;
+        let entity_id: i64 = match query_result {
+            Ok(id) => id.max_entity_id.unwrap() + 1i64,
+            Err(_e) => 0i64,
+        };
+
+        let entity_name: String = entity.name();
+        let entity_country: String = entity.country();
+        let entity_type: String = entity.entity_type().to_string();
+        let entity_subtype: String = entity.entity_subtype();
+        let entity_creation_date: String =
+            Local::now().date_naive().format(DATE_FORMAT).to_string();
+        sqlx::query_file!(
+            "src/queries/insertion/insert_into_entities.sql",
+            entity_id,
+            entity_name,
+            entity_country,
+            entity_type,
+            entity_subtype,
+            entity_creation_date,
+        )
+        .execute(&mut self.connection)
+        .await?;
+
+        Ok(())
     }
 
     pub(crate) async fn insert_party(&mut self, party: &mut Party) -> Result<(), sqlx::Error> {
