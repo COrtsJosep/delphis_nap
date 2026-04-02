@@ -617,4 +617,70 @@ impl FinancialDataBase {
 
         Ok(transaction)
     }
+
+    pub(crate) async fn party(&mut self, party_id: i64) -> Result<Party, sqlx::Error> {
+        let mut party: Party = Party::new(Vec::new());
+
+        // add incomes to the party
+        let query_result =
+            sqlx::query!("select income_id from incomes where party_id = ?", party_id)
+                .fetch_all(&mut self.connection)
+                .await?;
+
+        let income_ids: Vec<i64> = query_result.into_iter().map(|r| r.income_id).collect();
+        for income_id in income_ids {
+            party.add_transaction(self.transaction(TransactionType::Income, income_id).await?);
+        }
+
+        // add expenses to the party
+        let query_result = sqlx::query!(
+            "select expense_id from expenses where party_id = ?",
+            party_id
+        )
+        .fetch_all(&mut self.connection)
+        .await?;
+
+        let expense_ids: Vec<i64> = query_result.into_iter().map(|r| r.expense_id).collect();
+        for expense_id in expense_ids {
+            party.add_transaction(
+                self.transaction(TransactionType::Expense, expense_id)
+                    .await?,
+            );
+        }
+
+        // add fund movements to the party
+        let query_result = sqlx::query!(
+            "select fund_movement_id, fund_movement_type from fund_movements where party_id = ?",
+            party_id
+        )
+        .fetch_all(&mut self.connection)
+        .await?;
+
+        for record in query_result {
+            let transaction_type = match record.fund_movement_type == "Credit" {
+                true => TransactionType::Credit,
+                false => TransactionType::Debit,
+            };
+            party.add_transaction(
+                self.transaction(transaction_type, record.fund_movement_id)
+                    .await?,
+            );
+        }
+
+        Ok(party)
+    }
+
+    pub(crate) async fn delete_party(&mut self, party_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query!("delete from expenses where party_id = ?", party_id)
+            .execute(&mut self.connection)
+            .await?;
+        sqlx::query!("delete from incomes where party_id = ?", party_id)
+            .execute(&mut self.connection)
+            .await?;
+        sqlx::query!("delete from fund_movements where party_id = ?", party_id)
+            .execute(&mut self.connection)
+            .await?;
+
+        Ok(())
+    }
 }
