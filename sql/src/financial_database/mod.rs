@@ -23,7 +23,7 @@ struct ECBRecord {
     #[serde(rename = "TIME_PERIOD")]
     date: String,
     #[serde(rename = "OBS_VALUE")]
-    value: f64,
+    value: Option<f64>,
 }
 
 impl FinancialDataBase {
@@ -217,6 +217,8 @@ impl FinancialDataBase {
             let cursor = Cursor::new(csv_data);
 
             let mut reader = csv::Reader::from_reader(cursor);
+
+            let mut value: f64 = 1.0;
             for record in reader.deserialize() {
                 let ecb_record: ECBRecord = record.unwrap();
                 let record_date: NaiveDate =
@@ -226,7 +228,9 @@ impl FinancialDataBase {
                     dates.push(record_date.checked_add_days(Days::new(1)).unwrap());
                     dates.push(record_date.checked_add_days(Days::new(2)).unwrap());
                 }
-                let mut value: f64 = ecb_record.value;
+                value = ecb_record.value.unwrap_or(value);
+
+                let mut transaction = connection.begin().await?;
 
                 for date in dates {
                     for _ in 0..2 {
@@ -242,7 +246,7 @@ impl FinancialDataBase {
                             currency_to,
                             value,
                         )
-                        .execute(&mut *connection)
+                        .execute(&mut *transaction)
                         .await?;
 
                         let temp: String = currency_from;
@@ -251,6 +255,8 @@ impl FinancialDataBase {
                         value = 1.0 / value;
                     }
                 }
+
+                transaction.commit().await?;
             }
         }
 
