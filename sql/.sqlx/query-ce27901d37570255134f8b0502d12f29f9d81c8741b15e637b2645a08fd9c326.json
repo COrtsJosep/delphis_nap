@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into fund_movements\n(fund_movement_id, fund_movement_type, value, currency, date, account_id, party_id)\nvalues (?, ?, ?, ?, ?, ?, ?)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "ce27901d37570255134f8b0502d12f29f9d81c8741b15e637b2645a08fd9c326"
+}

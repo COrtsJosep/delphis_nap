@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(expense_id) as max_expense_id from expenses",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_expense_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "83f06ba48e5f539bfdb50f4a5de31bc4063bd469dcaaaf6f1bfe16f4f16e9977"
+}

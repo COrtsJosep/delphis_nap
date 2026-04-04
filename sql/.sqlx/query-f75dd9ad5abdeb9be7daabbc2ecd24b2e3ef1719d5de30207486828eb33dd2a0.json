@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(entity_id) as max_entity_id from entities",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_entity_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f75dd9ad5abdeb9be7daabbc2ecd24b2e3ef1719d5de30207486828eb33dd2a0"
+}

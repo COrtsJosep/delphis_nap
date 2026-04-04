@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into incomes\n(income_id, value, currency, date, category, subcategory, description, entity_id, party_id)\nvalues (?, ?, ?, ?, ?, ?, ?, ?, ?)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "3dc022f5b5a8380ceeedec3d25d76992400e9f279829d36bc874c4a8059038bb"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(account_id) as max_account_id from accounts",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_account_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "71ea6f015aecdd80f742fcf43b4de7952adffc001ad94a27cc114665b4c55034"
+}

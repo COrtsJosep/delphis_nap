@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select distinct category from expenses order by category",
+  "describe": {
+    "columns": [
+      {
+        "name": "category",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c8cf5f87eec485340b449c7e0096c0d2b489b119149337ff9285bb0daa220a16"
+}

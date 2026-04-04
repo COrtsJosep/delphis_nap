@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "select * from fund_movements where fund_movement_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "fund_movement_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fund_movement_type",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "value",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "currency",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_id",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "party_id",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "353115ad3053df49f765e35b6c1699c9111791cda1809385e3debccca7f2429c"
+}

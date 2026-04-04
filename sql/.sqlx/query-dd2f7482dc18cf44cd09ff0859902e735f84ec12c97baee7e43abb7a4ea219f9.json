@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists accounts (\n\taccount_id integer primary key,\n\tname text not null,\n\tcountry text not null,\n\tcurrency text not null,\n\taccount_type text not null,\n\tinitial_balance real not null,\n\tcreation_date text not null\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "dd2f7482dc18cf44cd09ff0859902e735f84ec12c97baee7e43abb7a4ea219f9"
+}

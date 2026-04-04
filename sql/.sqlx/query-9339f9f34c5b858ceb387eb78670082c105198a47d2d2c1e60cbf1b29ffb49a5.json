@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(fund_movement_id) as max_fund_movement_id from fund_movements",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_fund_movement_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9339f9f34c5b858ceb387eb78670082c105198a47d2d2c1e60cbf1b29ffb49a5"
+}

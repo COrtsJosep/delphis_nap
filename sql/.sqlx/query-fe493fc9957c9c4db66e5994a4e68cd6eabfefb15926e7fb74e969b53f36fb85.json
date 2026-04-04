@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select distinct subcategory from expenses where category = ? order by subcategory",
+  "describe": {
+    "columns": [
+      {
+        "name": "subcategory",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fe493fc9957c9c4db66e5994a4e68cd6eabfefb15926e7fb74e969b53f36fb85"
+}

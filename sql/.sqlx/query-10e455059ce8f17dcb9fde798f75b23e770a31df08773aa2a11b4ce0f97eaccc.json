@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select distinct category from incomes order by category",
+  "describe": {
+    "columns": [
+      {
+        "name": "category",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "10e455059ce8f17dcb9fde798f75b23e770a31df08773aa2a11b4ce0f97eaccc"
+}

@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "select * from incomes where income_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "income_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "value",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "currency",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "subcategory",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "entity_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "party_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f30d5f6d732b4c1426ff3eb43f5c7624ec2477fc8b7bcb7b71f5254632f6f51c"
+}

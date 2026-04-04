@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "select fund_movement_id, fund_movement_type from fund_movements where party_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "fund_movement_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "fund_movement_type",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "498d9465440daa626cc207e10e532f6378e9307ae2e1ee6cbf690b50a6de7a70"
+}

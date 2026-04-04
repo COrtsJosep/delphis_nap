@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(income_id) as max_income_id from incomes",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_income_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "3ec3b91f8e46b76871b4c6af6fdc3dc176f6c68d0d1d99a9810cc24425ee7876"
+}

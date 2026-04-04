@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists currency_exchanges (\n\tcurrency_expense_id text primary key,\n\tdate text not null,\n\tcurrency_from text not null,\n\tcurrency_to text not null,\n\tvalue real not null\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "428b88fba2d06068770eefbcf19bd2d7538e5020327a314000e525479c19920d"
+}

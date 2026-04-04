@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into entities\n(entity_id, name, country, entity_type, entity_subtype, creation_date)\nvalues (?, ?, ?, ?, ?, ?)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "5b2e2aeacf34173b00aa2090f9ce712d2de0388af26a553cf818c112556ddfe6"
+}

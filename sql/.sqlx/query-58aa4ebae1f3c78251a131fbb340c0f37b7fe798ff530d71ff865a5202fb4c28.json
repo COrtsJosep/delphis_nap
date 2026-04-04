@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists expenses (\n\texpense_id integer primary key,\n\tvalue real not null,\n\tcurrency text not null,\n\tdate text not null,\n\tcategory text not null,\n\tsubcategory text not null,\n\tdescription text not null,\n\tentity_id integer not null,\n\tparty_id integer not null,\n\tforeign key(entity_id) references entities(entity_id),\n\tforeign key(party_id) references parties(party_id)\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "58aa4ebae1f3c78251a131fbb340c0f37b7fe798ff530d71ff865a5202fb4c28"
+}

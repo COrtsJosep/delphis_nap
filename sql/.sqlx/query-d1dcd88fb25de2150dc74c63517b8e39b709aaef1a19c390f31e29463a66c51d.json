@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "select * from accounts where account_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "account_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "country",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "currency",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_type",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "initial_balance",
+        "ordinal": 5,
+        "type_info": "Float"
+      },
+      {
+        "name": "creation_date",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d1dcd88fb25de2150dc74c63517b8e39b709aaef1a19c390f31e29463a66c51d"
+}

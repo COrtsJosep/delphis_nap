@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists fund_movements (\n\tfund_movement_id integer primary key,\n\tfund_movement_type text not null,\n\tvalue real not null,\n\tcurrency text not null,\n\tdate text not null,\n\taccount_id integer not null,\n\tparty_id integer not null,\n\tforeign key(account_id) references accounts(account_id),\n\tforeign key(party_id) references parties(party_id)\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "1d7cd73d0c627ed2b8c94d3a9b8a666183b5a3abe658d2d43fe5163ac9f1664b"
+}

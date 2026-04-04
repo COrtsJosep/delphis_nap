@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select max(party_id) as max_party_id from parties",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_party_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "791b2ef42292bd20e0b8d654d23ba58c27835200bf7d476736bd01612b721796"
+}

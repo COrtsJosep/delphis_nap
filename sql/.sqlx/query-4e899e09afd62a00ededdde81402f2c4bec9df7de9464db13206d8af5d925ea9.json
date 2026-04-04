@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from fund_movements where party_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4e899e09afd62a00ededdde81402f2c4bec9df7de9464db13206d8af5d925ea9"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select distinct subcategory from incomes where category = ? order by subcategory",
+  "describe": {
+    "columns": [
+      {
+        "name": "subcategory",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dc7a31ce0438256da9ff201b92cd1a09b5556ad0cffb9e8eec5270f3440397f6"
+}

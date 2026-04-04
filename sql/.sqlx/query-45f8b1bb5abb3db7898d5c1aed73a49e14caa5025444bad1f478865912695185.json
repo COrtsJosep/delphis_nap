@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "select * from expenses where expense_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "expense_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "value",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "currency",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "date",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "category",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "subcategory",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "entity_id",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "party_id",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "45f8b1bb5abb3db7898d5c1aed73a49e14caa5025444bad1f478865912695185"
+}

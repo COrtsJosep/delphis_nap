@@ -1,15 +1,29 @@
 pub mod ser_deser;
 
+use crate::financial::Currency;
 use crate::table_records::*;
+use chrono::{Datelike, Days, Local, NaiveDate, Weekday};
 use sqlx::sqlite::SqliteConnection;
 use sqlx::Connection;
+use std::io::Cursor;
 use std::path::Path;
+use strum::IntoEnumIterator;
 use tokio::fs;
 
 const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
+const BASE_CURRENCY: Currency = Currency::EUR;
+const DATE_FORMAT: &str = "%Y-%m-%d";
 
 pub struct FinancialDataBase {
     connection: SqliteConnection,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ECBRecord {
+    #[serde(rename = "TIME_PERIOD")]
+    date: String,
+    #[serde(rename = "OBS_VALUE")]
+    value: f64,
 }
 
 impl FinancialDataBase {
@@ -17,7 +31,7 @@ impl FinancialDataBase {
         let financial_database_path_str = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
         let financial_database_path = Path::new(financial_database_path_str);
 
-        //fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
+        fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
         let mut connection = SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?;
 
@@ -163,7 +177,86 @@ impl FinancialDataBase {
         Ok(connection)
     }
 
-    //async fn init_currency_exchange(connection: &mut SqliteConnection) -> Result<(), sqlx::Error> {}
+    async fn init_currency_exchange(connection: &mut SqliteConnection) -> Result<(), sqlx::Error> {
+        sqlx::query_file!("src/queries/table_creation/create_currency_exchange_table.sql")
+            .execute(&mut *connection)
+            .await?;
+
+        let last_date: String =
+            match sqlx::query!("select max(date) as max_date from currency_exchanges")
+                .fetch_one(&mut *connection)
+                .await
+            {
+                Ok(row) => match row.max_date {
+                    Some(date) => date,
+                    None => String::from("1999-01-04"),
+                },
+                Err(_e) => String::from("1999-01-04"), // start of the time series
+            };
+        let today: String = Local::now().date_naive().format(DATE_FORMAT).to_string();
+
+        if last_date >= today {
+            return Ok(());
+        }
+
+        for other_currency in Currency::iter() {
+            if other_currency == BASE_CURRENCY {
+                continue;
+            }
+            let mut currency_from: String = BASE_CURRENCY.to_string();
+            let mut currency_to: String = other_currency.to_string();
+            let url = format!(
+                "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
+                currency_to,
+                currency_from,
+                last_date
+            );
+
+            let response = reqwest::get(url).await.unwrap();
+            let csv_data = response.bytes().await.unwrap();
+            let cursor = Cursor::new(csv_data);
+
+            let mut reader = csv::Reader::from_reader(cursor);
+            for record in reader.deserialize() {
+                let ecb_record: ECBRecord = record.unwrap();
+                let record_date: NaiveDate =
+                    NaiveDate::parse_from_str(ecb_record.date.as_str(), "%Y-%m-%d").unwrap();
+                let mut dates: Vec<NaiveDate> = vec![record_date];
+                if record_date.weekday() == Weekday::Fri {
+                    dates.push(record_date.checked_add_days(Days::new(1)).unwrap());
+                    dates.push(record_date.checked_add_days(Days::new(2)).unwrap());
+                }
+                let mut value: f64 = ecb_record.value;
+
+                for date in dates {
+                    for _ in 0..2 {
+                        // add from->to value, and then add to->from 1/value
+                        let date_string: String = date.format(DATE_FORMAT).to_string();
+                        let id: String =
+                            format!("{}_{}_{}", date_string, currency_from, currency_to,);
+                        sqlx::query_file!(
+                            "src/queries/insertion/insert_into_currency_exchanges.sql",
+                            id,
+                            date_string,
+                            currency_from,
+                            currency_to,
+                            value,
+                        )
+                        .execute(&mut *connection)
+                        .await?;
+
+                        let temp: String = currency_from;
+                        currency_from = currency_to;
+                        currency_to = temp;
+                        value = 1.0 / value;
+                    }
+                }
+            }
+        }
+
+        println!("executed");
+        Ok(())
+    }
 
     pub(crate) async fn init() -> Result<FinancialDataBase, sqlx::Error> {
         let financial_database_path_str = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
@@ -180,7 +273,7 @@ impl FinancialDataBase {
             }
         };
 
-        //FinancialDataBase::init_currency_exchange(&mut connection).await?;
+        FinancialDataBase::init_currency_exchange(&mut connection).await?;
 
         Ok(FinancialDataBase { connection })
     }

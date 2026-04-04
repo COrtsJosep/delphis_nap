@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "create table if not exists entities (\n\tentity_id integer primary key,\n\tname text not null,\n\tcountry text not null,\n\tentity_type text not null,\n\tentity_subtype text not null,\n\tcreation_date text not null\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "3c5781e242865173e70207c319c3b5e8d5c3bb4904b0fd8fd0cb323ffe251b81"
+}

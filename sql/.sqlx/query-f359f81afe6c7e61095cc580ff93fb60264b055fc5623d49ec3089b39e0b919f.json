@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into parties\n(party_id, creation_date)\nvalues (?, ?)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f359f81afe6c7e61095cc580ff93fb60264b055fc5623d49ec3089b39e0b919f"
+}

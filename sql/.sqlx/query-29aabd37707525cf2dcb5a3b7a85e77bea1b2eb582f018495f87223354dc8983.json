@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select entity_id from entities",
+  "describe": {
+    "columns": [
+      {
+        "name": "entity_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "29aabd37707525cf2dcb5a3b7a85e77bea1b2eb582f018495f87223354dc8983"
+}

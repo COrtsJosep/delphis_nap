@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from incomes where party_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "ab12a50febedf3953dcdda2358f5a85dbfefea5d8097834ed730acc3f2f1467b"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select expense_id from expenses where party_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "expense_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db4e7e6a84fb7acaec1fbefb7e3b5dbead6562355b0d0a1b5609bb52d059be10"
+}
