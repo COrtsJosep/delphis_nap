@@ -34,25 +34,26 @@ impl FinancialDataBase {
         fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
         let mut connection = SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?;
+        let mut transaction = connection.begin().await?;
 
         // initalization of all six tables
         sqlx::query_file!("src/queries/table_creation/create_account_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
         sqlx::query_file!("src/queries/table_creation/create_entity_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
         sqlx::query_file!("src/queries/table_creation/create_expense_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
         sqlx::query_file!("src/queries/table_creation/create_fund_movement_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
         sqlx::query_file!("src/queries/table_creation/create_income_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
         sqlx::query_file!("src/queries/table_creation/create_party_table.sql")
-            .execute(&mut connection)
+            .execute(&mut *transaction)
             .await?;
 
         // now populate the empty tables
@@ -71,9 +72,11 @@ impl FinancialDataBase {
                     account_record.initial_balance,
                     account_record.creation_date,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
+        } else {
+            // TODO: add default account
         }
 
         let entity_table_path = Path::new("data/entity_table.csv");
@@ -90,9 +93,11 @@ impl FinancialDataBase {
                     entity_record.entity_subtype,
                     entity_record.creation_date,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
+        } else {
+            // TODO: add default entity
         }
 
         let party_table_path = Path::new("data/party_table.csv");
@@ -105,7 +110,7 @@ impl FinancialDataBase {
                     record.party_id,
                     record.creation_date,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
         }
@@ -127,7 +132,7 @@ impl FinancialDataBase {
                     expense_record.entity_id,
                     expense_record.party_id,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
         }
@@ -147,7 +152,7 @@ impl FinancialDataBase {
                     record.account_id,
                     record.party_id,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
         }
@@ -169,10 +174,11 @@ impl FinancialDataBase {
                     record.entity_id,
                     record.party_id,
                 )
-                .execute(&mut connection)
+                .execute(&mut *transaction)
                 .await?;
             }
         }
+        transaction.commit().await?;
 
         Ok(connection)
     }
@@ -198,6 +204,8 @@ impl FinancialDataBase {
         if last_date >= today {
             return Ok(());
         }
+
+        let mut transaction = connection.begin().await?;
 
         for other_currency in Currency::iter() {
             if other_currency == BASE_CURRENCY {
@@ -230,8 +238,6 @@ impl FinancialDataBase {
                 }
                 value = ecb_record.value.unwrap_or(value);
 
-                let mut transaction = connection.begin().await?;
-
                 for date in dates {
                     for _ in 0..2 {
                         // add from->to value, and then add to->from 1/value
@@ -255,10 +261,9 @@ impl FinancialDataBase {
                         value = 1.0 / value;
                     }
                 }
-
-                transaction.commit().await?;
             }
         }
+        transaction.commit().await?;
 
         println!("executed");
         Ok(())
