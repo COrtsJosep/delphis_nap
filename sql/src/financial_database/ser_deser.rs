@@ -1,10 +1,9 @@
 use crate::financial::*;
+use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
 use chrono::{Local, NaiveDate};
 use std::str::FromStr;
 use std::vec::IntoIter;
-
-const DATE_FORMAT: &str = "%Y-%m-%d";
 
 impl FinancialDataBase {
     pub(crate) async fn insert_account(
@@ -345,7 +344,7 @@ impl FinancialDataBase {
         let transaction_subcategories = match transaction_type {
             TransactionType::Income => {
                 let rows = sqlx::query!(
-                        "select distinct subcategory from incomes where category = ? order by subcategory", 
+                        "select distinct subcategory from incomes where category = ? order by subcategory",
                         category
                     )
                     .fetch_all(&mut self.connection)
@@ -354,7 +353,7 @@ impl FinancialDataBase {
             }
             TransactionType::Expense => {
                 let rows = sqlx::query!(
-                        "select distinct subcategory from expenses where category = ? order by subcategory", 
+                        "select distinct subcategory from expenses where category = ? order by subcategory",
                         category
                     )
                     .fetch_all(&mut self.connection)

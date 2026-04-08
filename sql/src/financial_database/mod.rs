@@ -1,4 +1,5 @@
 pub mod ser_deser;
+pub mod summaries;
 pub mod views;
 
 use crate::financial::Currency;
