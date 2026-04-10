@@ -13,6 +13,15 @@ struct CurrentFundStandSummary {
     current_value: f64,
 }
 
+struct ExpenseSummaryRow {
+    category: String,
+    subcategory: String,
+    value: f64,
+    value_day: f64,
+    value_total_expenses: f64,
+    value_total_incomes: f64,
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, EnumIter, Clone, EnumString)]
 pub(crate) enum TimeUnit {
     Day,
@@ -107,10 +116,50 @@ impl FinancialDataBase {
         date_from: NaiveDate,
         date_to: NaiveDate,
         currency_to: &Currency,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<Vec<ExpenseSummaryRow>, sqlx::Error> {
         let total_income: f64 = self.total_income(date_from, date_to, currency_to).await?;
         let num_days: i64 = date_to.signed_duration_since(date_from).num_days();
+        let date_from_string: String = date_from.to_string();
+        let date_to_string: String = date_to.to_string();
+        let currency_to_string: String = currency_to.to_string();
 
-        Ok(())
+        let mut transaction = self.connection.begin().await?;
+
+        sqlx::query_file!(
+            "src/queries/summaries/temporary_expenses_grouped.sql",
+            currency_to_string,
+            date_from_string,
+            date_to_string
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        let mut expense_summary_rows: Vec<ExpenseSummaryRow> = sqlx::query_file_as!(
+            ExpenseSummaryRow,
+            "src/queries/summaries/summary_expenses.sql",
+            num_days,
+            total_income
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+
+        let expense_summary_last_row: ExpenseSummaryRow = sqlx::query_file_as!(
+            ExpenseSummaryRow,
+            "src/queries/summaries/summary_expenses_total.sql",
+            num_days,
+            total_income
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        expense_summary_rows.push(expense_summary_last_row);
+
+        sqlx::query!("drop table expenses_temporary")
+            .execute(&mut *transaction)
+            .await?;
+
+        transaction.commit().await?;
+
+        Ok(expense_summary_rows)
     }
 }

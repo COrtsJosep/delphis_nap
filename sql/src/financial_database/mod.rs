@@ -5,12 +5,10 @@ pub mod views;
 use crate::financial::Currency;
 use crate::table_records::*;
 use chrono::{Datelike, Days, Local, NaiveDate, Weekday};
-use sqlx::sqlite::SqliteConnection;
-use sqlx::Connection;
+use sqlx::{migrate::MigrateDatabase, sqlite::SqliteConnection, Connection, Sqlite};
 use std::io::Cursor;
 use std::path::Path;
 use strum::IntoEnumIterator;
-use tokio::fs;
 
 const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
 const BASE_CURRENCY: Currency = Currency::EUR;
@@ -30,10 +28,9 @@ struct ECBRecord {
 
 impl FinancialDataBase {
     async fn first_boot() -> Result<SqliteConnection, sqlx::Error> {
-        let financial_database_path_str = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
-        let financial_database_path = Path::new(financial_database_path_str);
+        let financial_database_path = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
 
-        fs::File::create_new(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
+        Sqlite::create_database(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
         let mut connection = SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?;
         let mut transaction = connection.begin().await?;
@@ -272,19 +269,19 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn init() -> Result<FinancialDataBase, sqlx::Error> {
-        let financial_database_path_str = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
-        let financial_database_path = Path::new(financial_database_path_str);
+        let financial_database_path = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
 
-        let mut connection: SqliteConnection = match financial_database_path.exists() {
-            true => {
-                println!("Connecting to existing database");
-                SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?
-            }
-            false => {
-                println!("Creating new database");
-                FinancialDataBase::first_boot().await?
-            }
-        };
+        let mut connection: SqliteConnection =
+            match Sqlite::database_exists(financial_database_path).await? {
+                true => {
+                    println!("Connecting to existing database");
+                    SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?
+                }
+                false => {
+                    println!("Creating new database");
+                    FinancialDataBase::first_boot().await?
+                }
+            };
 
         FinancialDataBase::init_currency_exchange(&mut connection).await?;
 

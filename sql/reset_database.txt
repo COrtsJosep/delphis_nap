@@ -6,3 +6,4 @@ sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_expen
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_income_table.sql
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_fund_movement_table.sql
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_currency_exchange_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_expense_temporary_table.sql
