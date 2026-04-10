@@ -76,37 +76,21 @@ impl FinancialDataBase {
         Ok(record.total_income.unwrap_or(0.0f64))
     }
 
+    /// check: might the fund_changes.value column be null?
     pub(crate) async fn current_fund_stand(
         &mut self,
         currency_to: Option<&Currency>,
     ) -> Result<Vec<CurrentFundStandSummary>, sqlx::Error> {
         if let Some(currency_to) = currency_to {
-            match currency_to {
-                Currency::EUR => {
-                    sqlx::query_file_as!(
-                        CurrentFundStandSummary,
-                        "src/queries/summaries/summary_current_fund_stand_eur.sql"
-                    )
-                    .fetch_all(&mut self.connection)
-                    .await
-                }
-                Currency::CHF => {
-                    sqlx::query_file_as!(
-                        CurrentFundStandSummary,
-                        "src/queries/summaries/summary_current_fund_stand_chf.sql"
-                    )
-                    .fetch_all(&mut self.connection)
-                    .await
-                }
-                Currency::SEK => {
-                    sqlx::query_file_as!(
-                        CurrentFundStandSummary,
-                        "src/queries/summaries/summary_current_fund_stand_sek.sql"
-                    )
-                    .fetch_all(&mut self.connection)
-                    .await
-                }
-            }
+            let currency_to_string: String = currency_to.to_string();
+            sqlx::query_file_as!(
+                CurrentFundStandSummary,
+                "src/queries/summaries/summary_current_fund_stand_currency.sql",
+                currency_to_string,
+                currency_to_string
+            )
+            .fetch_all(&mut self.connection)
+            .await
         } else {
             sqlx::query_file_as!(
                 CurrentFundStandSummary,
@@ -115,5 +99,18 @@ impl FinancialDataBase {
             .fetch_all(&mut self.connection)
             .await
         }
+    }
+
+    /// Generates a summary table of all expenses between date_from to date_to, expressed in the currency_to
+    pub(crate) async fn expenses_summary(
+        &mut self,
+        date_from: NaiveDate,
+        date_to: NaiveDate,
+        currency_to: &Currency,
+    ) -> Result<(), sqlx::Error> {
+        let total_income: f64 = self.total_income(date_from, date_to, currency_to).await?;
+        let num_days: i64 = date_to.signed_duration_since(date_from).num_days();
+
+        Ok(())
     }
 }
