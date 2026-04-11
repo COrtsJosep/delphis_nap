@@ -6,10 +6,7 @@ use std::str::FromStr;
 use std::vec::IntoIter;
 
 impl FinancialDataBase {
-    pub(crate) async fn insert_account(
-        &mut self,
-        account: &mut Account,
-    ) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_account(&mut self, account: Account) -> Result<(), sqlx::Error> {
         let query_result = sqlx::query!("select max(account_id) as max_account_id from accounts")
             .fetch_one(&mut self.connection)
             .await;
@@ -504,5 +501,72 @@ impl FinancialDataBase {
             .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::table_records::AccountRecord;
+    use crate::{TEST_FINANCIAL_DATABASE_URL, TEST_ORIGINAL_FINANCIAL_DATABASE_URL};
+    use sqlx::{migrate::MigrateDatabase, Sqlite};
+
+    async fn reset_database() -> () {
+        if Sqlite::database_exists(TEST_FINANCIAL_DATABASE_URL)
+            .await
+            .unwrap()
+        {
+            Sqlite::force_drop_database(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+        }
+
+        std::fs::copy(
+            TEST_ORIGINAL_FINANCIAL_DATABASE_URL
+                .strip_prefix("sqlite://")
+                .unwrap(),
+            TEST_FINANCIAL_DATABASE_URL
+                .strip_prefix("sqlite://")
+                .unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_insert_account() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let account = Account::new(
+            String::from("Credit Suisse"),
+            String::from("Switzerland"),
+            Currency::CHF,
+            AccountType::Deposit,
+            1080.0f64,
+        );
+
+        let expected_account_record: AccountRecord = AccountRecord {
+            account_id: 1i64,
+            name: String::from("Credit Suisse"),
+            country: String::from("Switzerland"),
+            currency: String::from("CHF"),
+            account_type: String::from("Deposit"),
+            initial_balance: 1080.0f64,
+            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+        };
+
+        financial_database.insert_account(account).await.unwrap();
+
+        let actual_account_record: AccountRecord =
+            sqlx::query_as!(AccountRecord, "select * from accounts where account_id = 1")
+                .fetch_one(&mut financial_database.connection)
+                .await
+                .unwrap();
+
+        assert_eq!(expected_account_record, actual_account_record)
     }
 }

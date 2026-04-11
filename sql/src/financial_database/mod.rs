@@ -10,7 +10,6 @@ use std::io::Cursor;
 use std::path::Path;
 use strum::IntoEnumIterator;
 
-const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
 const BASE_CURRENCY: Currency = Currency::EUR;
 const DATE_FORMAT: &str = "%Y-%m-%d";
 
@@ -27,12 +26,10 @@ struct ECBRecord {
 }
 
 impl FinancialDataBase {
-    async fn first_boot() -> Result<SqliteConnection, sqlx::Error> {
-        let financial_database_path = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
-
-        Sqlite::create_database(financial_database_path).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
+    async fn first_boot(financial_database_url: &str) -> Result<SqliteConnection, sqlx::Error> {
+        Sqlite::create_database(financial_database_url).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
-        let mut connection = SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?;
+        let mut connection = SqliteConnection::connect(financial_database_url).await?;
         let mut transaction = connection.begin().await?;
 
         // initalization of all six tables
@@ -264,22 +261,21 @@ impl FinancialDataBase {
         }
         transaction.commit().await?;
 
-        println!("executed");
         Ok(())
     }
 
-    pub(crate) async fn init() -> Result<FinancialDataBase, sqlx::Error> {
-        let financial_database_path = FINANCIAL_DATABASE_URL.strip_prefix("sqlite://").unwrap();
-
+    pub(crate) async fn init(
+        financial_database_url: &str,
+    ) -> Result<FinancialDataBase, sqlx::Error> {
         let mut connection: SqliteConnection =
-            match Sqlite::database_exists(financial_database_path).await? {
+            match Sqlite::database_exists(financial_database_url).await? {
                 true => {
-                    println!("Connecting to existing database");
-                    SqliteConnection::connect(FINANCIAL_DATABASE_URL).await?
+                    println!("Connecting to existing database!");
+                    SqliteConnection::connect(financial_database_url).await?
                 }
                 false => {
-                    println!("Creating new database");
-                    FinancialDataBase::first_boot().await?
+                    println!("Creating new database!");
+                    FinancialDataBase::first_boot(financial_database_url).await?
                 }
             };
 

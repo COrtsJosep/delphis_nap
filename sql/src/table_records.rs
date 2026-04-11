@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct AccountRecord {
-    pub account_id: u32,
+    pub account_id: i64,
     pub name: String,
     pub country: String,
     pub currency: String,
@@ -13,7 +13,7 @@ pub(crate) struct AccountRecord {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct EntityRecord {
-    pub entity_id: u32,
+    pub entity_id: i64,
     pub name: String,
     pub country: String,
     pub entity_type: String,
@@ -23,43 +23,43 @@ pub(crate) struct EntityRecord {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ExpenseRecord {
-    pub expense_id: u32,
+    pub expense_id: i64,
     pub value: f64,
     pub currency: String,
     pub date: String,
     pub category: String,
     pub subcategory: String,
     pub description: String,
-    pub entity_id: u32,
-    pub party_id: u32,
+    pub entity_id: i64,
+    pub party_id: i64,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FundMovementRecord {
-    pub fund_movement_id: u32,
+    pub fund_movement_id: i64,
     pub fund_movement_type: String,
     pub value: f64,
     pub currency: String,
     pub date: String,
-    pub account_id: u32,
-    pub party_id: u32,
+    pub account_id: i64,
+    pub party_id: i64,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct IncomeRecord {
-    pub income_id: u32,
+    pub income_id: i64,
     pub value: f64,
     pub currency: String,
     pub date: String,
     pub category: String,
     pub subcategory: String,
     pub description: String,
-    pub entity_id: u32,
-    pub party_id: u32,
+    pub entity_id: i64,
+    pub party_id: i64,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PartyRecord {
-    pub party_id: u32,
+    pub party_id: i64,
     pub creation_date: String,
 }
