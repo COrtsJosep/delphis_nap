@@ -1,7 +1,7 @@
 use crate::financial::Currency;
 use crate::financial_database::{FinancialDataBase, DATE_FORMAT};
 use chrono::NaiveDate;
-use sqlx::Connection;
+use sqlx::{sqlite::SqliteRow, Connection};
 use std::fmt::Display;
 use strum_macros::{EnumIter, EnumString};
 
@@ -37,6 +37,14 @@ impl TimeUnit {
             TimeUnit::Week => "1w",
             TimeUnit::Month => "1mo",
             TimeUnit::Year => "1y",
+        }
+    }
+    fn date_format(&self) -> &str {
+        match self {
+            TimeUnit::Day => "%Y-%m-%d",
+            TimeUnit::Week => "%Y-%W",
+            TimeUnit::Month => "%Y-%m",
+            TimeUnit::Year => "%Y",
         }
     }
 }
@@ -161,5 +169,53 @@ impl FinancialDataBase {
         transaction.commit().await?;
 
         Ok(expense_summary_rows)
+    }
+
+    /// sadly, in this case the query needs to be constructed dinamically
+    /// because we do not know what columns will be retrieved (since we do
+    /// not know what unique categories are stored in the database).
+    pub(crate) async fn evolution_table(
+        &mut self,
+        currency_to: &Currency,
+        time_unit: &TimeUnit,
+    ) -> Result<(Vec<String>, Vec<SqliteRow>), sqlx::Error> {
+        let currency_to_string: String = currency_to.to_string();
+        let time_unit_format: String = time_unit.date_format().to_string();
+        let unique_categories: Vec<String> = sqlx::query!("select distinct category from expenses")
+            .fetch_all(&mut self.connection)
+            .await?
+            .into_iter()
+            .map(|record| record.category)
+            .collect::<Vec<String>>();
+
+        sqlx::query_file!(
+            "src/queries/summaries/temporary_expense_evolution_grouped.sql",
+            time_unit_format,
+            currency_to_string,
+            time_unit_format,
+            time_unit_format
+        )
+        .execute(&mut self.connection)
+        .await?;
+
+        let mut query_string: String = String::from("select date, ");
+        for unique_category in &unique_categories {
+            let new_line: String = format!(
+                "sum(case when category = '{}' then value else 0.0 end) as {},",
+                unique_category,
+                unique_category.replace(" ", "_")
+            );
+            query_string = query_string + &new_line;
+        }
+
+        query_string = query_string[..(query_string.len() - 1)].to_string() // remove last comma
+            + " from expense_evolution_temporary";
+        let query_str: &str = &query_string;
+
+        let rows: Vec<SqliteRow> = sqlx::query(query_str)
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        Ok((unique_categories, rows))
     }
 }
