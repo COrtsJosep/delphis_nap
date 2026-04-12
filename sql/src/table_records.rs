@@ -11,7 +11,7 @@ pub(crate) struct AccountRecord {
     pub creation_date: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct EntityRecord {
     pub entity_id: i64,
     pub name: String,
@@ -21,7 +21,7 @@ pub(crate) struct EntityRecord {
     pub creation_date: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct ExpenseRecord {
     pub expense_id: i64,
     pub value: f64,
@@ -34,7 +34,7 @@ pub(crate) struct ExpenseRecord {
     pub party_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct FundMovementRecord {
     pub fund_movement_id: i64,
     pub fund_movement_type: String,
@@ -45,7 +45,7 @@ pub(crate) struct FundMovementRecord {
     pub party_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct IncomeRecord {
     pub income_id: i64,
     pub value: f64,
@@ -58,7 +58,7 @@ pub(crate) struct IncomeRecord {
     pub party_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub(crate) struct PartyRecord {
     pub party_id: i64,
     pub creation_date: String,

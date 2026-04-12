@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::vec::IntoIter;
 
 impl FinancialDataBase {
-    pub(crate) async fn insert_account(&mut self, account: Account) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_account(&mut self, account: &Account) -> Result<(), sqlx::Error> {
         let query_result = sqlx::query!("select max(account_id) as max_account_id from accounts")
             .fetch_one(&mut self.connection)
             .await;
@@ -38,7 +38,7 @@ impl FinancialDataBase {
         Ok(())
     }
 
-    pub(crate) async fn insert_entity(&mut self, entity: &mut Entity) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_entity(&mut self, entity: &Entity) -> Result<(), sqlx::Error> {
         let query_result = sqlx::query!("select max(entity_id) as max_entity_id from entities")
             .fetch_one(&mut self.connection)
             .await;
@@ -507,16 +507,17 @@ impl FinancialDataBase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::table_records::AccountRecord;
+    use crate::table_records::*;
     use crate::{TEST_FINANCIAL_DATABASE_URL, TEST_ORIGINAL_FINANCIAL_DATABASE_URL};
     use sqlx::{migrate::MigrateDatabase, Sqlite};
 
+    /// tears down the test database and sets it up again
     async fn reset_database() -> () {
         if Sqlite::database_exists(TEST_FINANCIAL_DATABASE_URL)
             .await
             .unwrap()
         {
-            Sqlite::force_drop_database(TEST_FINANCIAL_DATABASE_URL)
+            Sqlite::drop_database(TEST_FINANCIAL_DATABASE_URL)
                 .await
                 .unwrap();
         }
@@ -559,7 +560,7 @@ mod tests {
             creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
         };
 
-        financial_database.insert_account(account).await.unwrap();
+        financial_database.insert_account(&account).await.unwrap();
 
         let actual_account_record: AccountRecord =
             sqlx::query_as!(AccountRecord, "select * from accounts where account_id = 1")
@@ -568,5 +569,247 @@ mod tests {
                 .unwrap();
 
         assert_eq!(expected_account_record, actual_account_record)
+    }
+
+    #[tokio::test]
+    async fn test_insert_entity() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let entity = Entity::new(
+            String::from("Aldi"),
+            String::from("Germany"),
+            EntityType::Firm,
+            String::from("Supermarket"),
+        );
+
+        let expected_entity_record: EntityRecord = EntityRecord {
+            entity_id: 1i64,
+            name: String::from("Aldi"),
+            country: String::from("Germany"),
+            entity_type: String::from("Firm"),
+            entity_subtype: String::from("Supermarket"),
+            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+        };
+
+        financial_database.insert_entity(&entity).await.unwrap();
+
+        let actual_entity_record: EntityRecord =
+            sqlx::query_as!(EntityRecord, "select * from entities where entity_id = 1")
+                .fetch_one(&mut financial_database.connection)
+                .await
+                .unwrap();
+
+        assert_eq!(expected_entity_record, actual_entity_record)
+    }
+
+    #[tokio::test]
+    async fn test_insert_expense() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let expense = Transaction::Expense {
+            value: 100.0,
+            currency: Currency::EUR,
+            date: Local::now().date_naive(),
+            category: String::from("Groceries"),
+            subcategory: String::from("Food"),
+            description: String::from("Weekly shopping"),
+            entity_id: 0,
+        };
+
+        let expected_expense_record: ExpenseRecord = ExpenseRecord {
+            expense_id: 262i64,
+            value: 100.0f64,
+            currency: String::from("EUR"),
+            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            category: String::from("Groceries"),
+            subcategory: String::from("Food"),
+            description: String::from("Weekly shopping"),
+            entity_id: 0i64,
+            party_id: 0i64,
+        };
+
+        financial_database
+            .insert_transaction(&expense, 0i64)
+            .await
+            .unwrap();
+
+        let actual_expense_record: ExpenseRecord = sqlx::query_as!(
+            ExpenseRecord,
+            "select * from expenses where expense_id = 262"
+        )
+        .fetch_one(&mut financial_database.connection)
+        .await
+        .unwrap();
+
+        assert_eq!(expected_expense_record, actual_expense_record);
+    }
+
+    #[tokio::test]
+    async fn test_insert_income() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let income = Transaction::Income {
+            value: 5000.0,
+            currency: Currency::CHF,
+            date: Local::now().date_naive(),
+            category: String::from("Salary"),
+            subcategory: String::from("Monthly"),
+            description: String::from("March salary"),
+            entity_id: 0,
+        };
+
+        let expected_income_record: IncomeRecord = IncomeRecord {
+            income_id: 12i64,
+            value: 5000.0f64,
+            currency: String::from("CHF"),
+            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            category: String::from("Salary"),
+            subcategory: String::from("Monthly"),
+            description: String::from("March salary"),
+            entity_id: 0i64,
+            party_id: 0i64,
+        };
+
+        financial_database
+            .insert_transaction(&income, 0i64)
+            .await
+            .unwrap();
+
+        let actual_income_record: IncomeRecord =
+            sqlx::query_as!(IncomeRecord, "select * from incomes where income_id = 12")
+                .fetch_one(&mut financial_database.connection)
+                .await
+                .unwrap();
+
+        assert_eq!(expected_income_record, actual_income_record);
+    }
+
+    #[tokio::test]
+    async fn test_insert_credit() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let credit = Transaction::Credit {
+            value: 200.0,
+            currency: Currency::CHF,
+            date: Local::now().date_naive(),
+            account_id: 0,
+        };
+
+        let expected_credit_record: FundMovementRecord = FundMovementRecord {
+            fund_movement_id: 274i64,
+            fund_movement_type: String::from("Credit"),
+            value: 200.0f64,
+            currency: String::from("CHF"),
+            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            account_id: 0i64,
+            party_id: 0i64,
+        };
+
+        financial_database
+            .insert_transaction(&credit, 0i64)
+            .await
+            .unwrap();
+
+        let actual_credit_record: FundMovementRecord = sqlx::query_as!(
+            FundMovementRecord,
+            "select * from fund_movements where fund_movement_id = 274"
+        )
+        .fetch_one(&mut financial_database.connection)
+        .await
+        .unwrap();
+
+        assert_eq!(expected_credit_record, actual_credit_record);
+    }
+
+    #[tokio::test]
+    async fn test_insert_debit() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let debit = Transaction::Debit {
+            value: 100.0,
+            currency: Currency::CHF,
+            date: Local::now().date_naive(),
+            account_id: 0,
+        };
+
+        let expected_debit_record: FundMovementRecord = FundMovementRecord {
+            fund_movement_id: 274i64,
+            fund_movement_type: String::from("Debit"),
+            value: -100.0f64, // Note: Debit is stored as negative
+            currency: String::from("CHF"),
+            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            account_id: 0i64,
+            party_id: 0i64,
+        };
+
+        financial_database
+            .insert_transaction(&debit, 0i64)
+            .await
+            .unwrap();
+
+        let actual_debit_record: FundMovementRecord = sqlx::query_as!(
+            FundMovementRecord,
+            "select * from fund_movements where fund_movement_id = 274"
+        )
+        .fetch_one(&mut financial_database.connection)
+        .await
+        .unwrap();
+
+        assert_eq!(expected_debit_record, actual_debit_record);
+    }
+
+    #[tokio::test]
+    async fn test_insert_party() {
+        reset_database().await;
+
+        let mut financial_database: FinancialDataBase =
+            FinancialDataBase::init(TEST_FINANCIAL_DATABASE_URL)
+                .await
+                .unwrap();
+
+        let mut party: Party = Party {
+            transactions: vec![],
+            creation_date: Local::now().date_naive(),
+        };
+
+        let expected_party_record: PartyRecord = PartyRecord {
+            party_id: 274i64,
+            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+        };
+
+        financial_database.insert_party(&mut party).await.unwrap();
+
+        let actual_party_record: PartyRecord =
+            sqlx::query_as!(PartyRecord, "select * from parties where party_id = 274")
+                .fetch_one(&mut financial_database.connection)
+                .await
+                .unwrap();
+
+        assert_eq!(expected_party_record, actual_party_record);
     }
 }
