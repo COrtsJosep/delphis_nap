@@ -234,7 +234,7 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn iter_entity_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
-        let rows = sqlx::query!("select entity_id from entities")
+        let rows = sqlx::query!("select entity_id from entities order by name asc limit 20")
             .fetch_all(&mut self.connection)
             .await?;
 
@@ -258,7 +258,7 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn entity_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
-        let rows = sqlx::query!("select distinct country from entities order by country")
+        let rows = sqlx::query!("select distinct country from entities order by country asc")
             .fetch_all(&mut self.connection)
             .await?;
 
@@ -267,17 +267,18 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn entity_subtypes(&mut self) -> Result<Vec<String>, sqlx::Error> {
-        let rows =
-            sqlx::query!("select distinct entity_subtype from entities order by entity_subtype")
-                .fetch_all(&mut self.connection)
-                .await?;
+        let rows = sqlx::query!(
+            "select distinct entity_subtype from entities order by entity_subtype asc"
+        )
+        .fetch_all(&mut self.connection)
+        .await?;
 
         let entity_subtypes = rows.into_iter().map(|r| r.entity_subtype).collect();
         Ok(entity_subtypes)
     }
 
     pub(crate) async fn iter_account_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
-        let rows = sqlx::query!("select account_id from accounts")
+        let rows = sqlx::query!("select account_id from accounts order by name asc")
             .fetch_all(&mut self.connection)
             .await?;
 
@@ -302,7 +303,7 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn account_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
-        let rows = sqlx::query!("select distinct country from accounts order by country")
+        let rows = sqlx::query!("select distinct country from accounts order by country asc")
             .fetch_all(&mut self.connection)
             .await?;
 
@@ -316,15 +317,17 @@ impl FinancialDataBase {
     ) -> Result<Vec<String>, sqlx::Error> {
         let transaction_categories = match transaction_type {
             TransactionType::Income => {
-                let rows = sqlx::query!("select distinct category from incomes order by category")
-                    .fetch_all(&mut self.connection)
-                    .await?;
+                let rows =
+                    sqlx::query!("select distinct category from incomes order by category asc")
+                        .fetch_all(&mut self.connection)
+                        .await?;
                 rows.into_iter().map(|r| r.category).collect()
             }
             TransactionType::Expense => {
-                let rows = sqlx::query!("select distinct category from expenses order by category")
-                    .fetch_all(&mut self.connection)
-                    .await?;
+                let rows =
+                    sqlx::query!("select distinct category from expenses order by category asc")
+                        .fetch_all(&mut self.connection)
+                        .await?;
                 rows.into_iter().map(|r| r.category).collect()
             }
             _ => Vec::new(), // Should never happen for Credit/Debit
@@ -341,7 +344,7 @@ impl FinancialDataBase {
         let transaction_subcategories = match transaction_type {
             TransactionType::Income => {
                 let rows = sqlx::query!(
-                        "select distinct subcategory from incomes where category = ? order by subcategory",
+                        "select distinct subcategory from incomes where category = ? order by subcategory asc",
                         category
                     )
                     .fetch_all(&mut self.connection)
@@ -350,7 +353,7 @@ impl FinancialDataBase {
             }
             TransactionType::Expense => {
                 let rows = sqlx::query!(
-                        "select distinct subcategory from expenses where category = ? order by subcategory",
+                        "select distinct subcategory from expenses where category = ? order by subcategory asc",
                         category
                     )
                     .fetch_all(&mut self.connection)

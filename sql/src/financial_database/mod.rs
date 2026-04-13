@@ -1,3 +1,4 @@
+pub mod plotter;
 pub mod ser_deser;
 pub mod summaries;
 pub mod views;
