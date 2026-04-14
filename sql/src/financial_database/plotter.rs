@@ -4,14 +4,10 @@ use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
 use chrono::NaiveDate;
 use plotters::prelude::*;
+use sqlx::Connection;
 use std::collections::HashMap;
 use std::fmt::Display;
 use strum_macros::EnumIter;
-
-enum Extrema {
-    MIN,
-    MAX,
-}
 
 #[derive(EnumIter, Eq, PartialEq)]
 pub(crate) enum BarplotType {
@@ -33,6 +29,12 @@ impl Display for BarplotType {
         };
         write!(f, "{}", str)
     }
+}
+
+struct MonthlyExpensesRecord {
+    month: String,
+    category: String,
+    value: f64,
 }
 
 impl BarplotType {
@@ -137,44 +139,65 @@ impl FinancialDataBase {
     ) -> Result<(), sqlx::Error> {
         let currency_to_string: String = currency_to.to_string();
 
-        let records = match barplot_type {
+        let mut transaction = self.connection.begin().await?;
+        match barplot_type {
             BarplotType::ABSOLUTE => {
-                sqlx::query_file_as!(
-                    MonthlyExpensesRecord,
-                    "src/queries/plots/plot_monthly_expenses_absolute.sql",
+                sqlx::query_file!(
+                    "src/queries/plots/temporary_monthly_expenses_absolute.sql",
                     currency_to_string
                 )
-                .fetch_all(&mut self.connection)
-                .await?
+                .execute(&mut *transaction)
+                .await?;
             }
             BarplotType::RELATIVE => {
-                sqlx::query_file_as!(
-                    MonthlyExpensesRecord,
-                    "src/queries/plots/plot_monthly_expenses_relative.sql",
+                sqlx::query_file!(
+                    "src/queries/plots/temporary_monthly_expenses_relative.sql",
                     currency_to_string
                 )
-                .fetch_all(&mut self.connection)
-                .await?
+                .execute(&mut *transaction)
+                .await?;
             }
         };
 
+        let records: Vec<MonthlyExpensesRecord> = sqlx::query_as!(
+            MonthlyExpensesRecord,
+            "select * from monthly_expenses_temporary"
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+
         let mut months_hm: HashMap<String, HashMap<String, f64>> = HashMap::new();
-        let mut unique_categories: Vec<String> = vec![];
         for record in records {
-            let category_hm = months_hm.entry(record.date).or_insert_with(HashMap::new);
-            category_hm.insert(record.category.clone(), record.aggregate_value);
-            if !unique_categories.contains(&record.category) {
-                unique_categories.push(record.category);
-            }
+            let category_hm = months_hm.entry(record.month).or_insert_with(HashMap::new);
+            category_hm.insert(record.category.clone(), record.value);
         }
 
         let mut unique_months: Vec<String> = months_hm.keys().map(|m| m.to_owned()).collect();
         unique_months.sort_unstable();
 
+        let unique_categories: Vec<String> = sqlx::query!(
+            "select distinct category from monthly_expenses_temporary order by value desc"
+        )
+        .fetch_all(&mut *transaction)
+        .await?
+        .into_iter()
+        .map(|record| record.category)
+        .collect();
+
+        let lower_bound: f64 = sqlx::query_file!("src/queries/plots/monthly_expenses_min.sql")
+            .fetch_one(&mut *transaction)
+            .await?
+            .min;
+        let upper_bound: f64 = sqlx::query_file!("src/queries/plots/monthly_expenses_max.sql")
+            .fetch_one(&mut *transaction)
+            .await?
+            .max;
+
         // now we have:
         // - a vec of unique months, sorted asc
         // - a vec of unique categories, sorted desc on largest expenses per month
         // - a dict of dicts (one per month) of string (category) -> f64 (agg value)
+        // - the upper and lower limits of the y axis
         //
         // so we can start plotting!
 
@@ -190,7 +213,7 @@ impl FinancialDataBase {
             )
             .set_label_area_size(LabelAreaPosition::Left, 60)
             .set_label_area_size(LabelAreaPosition::Bottom, 60)
-            .build_cartesian_2d(unique_months.into_segmented(), 0.0..1.0) // TODO
+            .build_cartesian_2d(unique_months.into_segmented(), lower_bound..upper_bound)
             .unwrap();
 
         // Initialize the plotted objects.
@@ -265,12 +288,10 @@ impl FinancialDataBase {
             .draw()
             .unwrap();
 
-        Ok(())
-    }
-}
+        sqlx::query!("drop table if exists monthly_expenses_temporary")
+            .execute(&mut *transaction)
+            .await?;
 
-struct MonthlyExpensesRecord {
-    date: String,
-    category: String,
-    aggregate_value: f64,
+        transaction.commit().await
+    }
 }
