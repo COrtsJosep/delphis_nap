@@ -29,4 +29,4 @@ where
 	currency_exchanges_to_eur.date >= min((select min(creation_date) from accounts), (select min(date) from fund_movements))
 	and currency_exchanges_to_eur.date <= max((select max(creation_date) from accounts), (select max(date) from fund_movements)) 
 group by currency_exchanges_from_eur.date
-order by currency_exchanges_from_eur.date;
+order by currency_exchanges_from_eur.date asc

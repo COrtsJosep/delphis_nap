@@ -1,3 +1,4 @@
+mod palettes;
 pub mod plotter;
 pub mod ser_deser;
 pub mod summaries;
