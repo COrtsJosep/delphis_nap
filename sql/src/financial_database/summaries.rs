@@ -5,21 +5,21 @@ use sqlx::{sqlite::SqliteRow, Connection};
 use std::fmt::Display;
 use strum_macros::{EnumIter, EnumString};
 
-struct CurrentFundStandSummary {
-    name: String,
-    country: String,
-    currency: String,
-    account_type: String,
-    current_value: f64,
+pub(crate) struct CurrentFundStandRow {
+    pub name: String,
+    pub country: String,
+    pub currency: String,
+    pub account_type: String,
+    pub current_value: f64,
 }
 
-struct ExpenseSummaryRow {
-    category: String,
-    subcategory: String,
-    value: f64,
-    value_day: f64,
-    value_total_expenses: f64,
-    value_total_incomes: f64,
+pub(crate) struct ExpenseSummaryRow {
+    pub category: String,
+    pub subcategory: String,
+    pub value: f64,
+    pub value_day: f64,
+    pub value_total_expenses: f64,
+    pub value_total_incomes: f64,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, EnumIter, Clone, EnumString)]
@@ -97,11 +97,11 @@ impl FinancialDataBase {
     pub(crate) async fn current_fund_stand(
         &mut self,
         currency_to: Option<&Currency>,
-    ) -> Result<Vec<CurrentFundStandSummary>, sqlx::Error> {
+    ) -> Result<Vec<CurrentFundStandRow>, sqlx::Error> {
         if let Some(currency_to) = currency_to {
             let currency_to_string: String = currency_to.to_string();
             sqlx::query_file_as!(
-                CurrentFundStandSummary,
+                CurrentFundStandRow,
                 "src/queries/summaries/summary_current_fund_stand_currency.sql",
                 currency_to_string,
                 currency_to_string
@@ -110,7 +110,7 @@ impl FinancialDataBase {
             .await
         } else {
             sqlx::query_file_as!(
-                CurrentFundStandSummary,
+                CurrentFundStandRow,
                 "src/queries/summaries/summary_current_fund_stand_nocurrency.sql"
             )
             .fetch_all(&mut self.connection)

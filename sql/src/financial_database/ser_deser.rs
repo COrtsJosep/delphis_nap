@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::vec::IntoIter;
 
 impl FinancialDataBase {
-    pub(crate) async fn insert_account(&mut self, account: &Account) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_account(&mut self, account: &Account) -> Result<i64, sqlx::Error> {
         let query_result = sqlx::query!("select max(account_id) as max_account_id from accounts")
             .fetch_one(&mut self.connection)
             .await;
@@ -35,10 +35,10 @@ impl FinancialDataBase {
         .execute(&mut self.connection)
         .await?;
 
-        Ok(())
+        Ok(account_id)
     }
 
-    pub(crate) async fn insert_entity(&mut self, entity: &Entity) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_entity(&mut self, entity: &Entity) -> Result<i64, sqlx::Error> {
         let query_result = sqlx::query!("select max(entity_id) as max_entity_id from entities")
             .fetch_one(&mut self.connection)
             .await;
@@ -65,7 +65,7 @@ impl FinancialDataBase {
         .execute(&mut self.connection)
         .await?;
 
-        Ok(())
+        Ok(entity_id)
     }
 
     pub(crate) async fn insert_party(&mut self, party: &mut Party) -> Result<(), sqlx::Error> {

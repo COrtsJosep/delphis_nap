@@ -6,6 +6,7 @@ select
 	name,
 	category,
 	subcategory,
+	description,
 	party_id
 from (
 		select
@@ -14,6 +15,7 @@ from (
 			currency,
 			category,
 			subcategory,
+			description,
 			entity_id,
 			party_id,
 			"Income" as transaction_type 
@@ -25,6 +27,7 @@ from (
 			currency,
 			category,
 			subcategory,
+			description,
 			entity_id,
 			party_id,
 			"Expense" as transaction_type 

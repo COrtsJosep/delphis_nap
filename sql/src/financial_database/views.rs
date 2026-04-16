@@ -1,23 +1,26 @@
 use crate::financial_database::FinancialDataBase;
 
-struct TransactionView {
-    transaction_type: String,
-    date: String,
-    value: f64,
-    currency: String,
-    name: String,
-    category: String,
-    subcategory: String,
-    party_id: i64,
+#[derive(Clone)]
+pub(crate) struct TransactionView {
+    pub transaction_type: String,
+    pub date: String,
+    pub value: f64,
+    pub currency: String,
+    pub name: String,
+    pub category: String,
+    pub subcategory: String,
+    pub description: String,
+    pub party_id: i64,
 }
 
-struct FundMovementView {
-    fund_movement_type: String,
-    value: f64,
-    currency: String,
-    date: String,
-    party_id: i64,
-    name: String,
+#[derive(Clone)]
+pub(crate) struct FundMovementView {
+    pub fund_movement_type: String,
+    pub value: f64,
+    pub currency: String,
+    pub date: String,
+    pub party_id: i64,
+    pub name: String,
 }
 
 impl FinancialDataBase {

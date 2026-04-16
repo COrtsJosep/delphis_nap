@@ -6,11 +6,13 @@ pub mod views;
 
 use crate::financial::Currency;
 use crate::table_records::*;
+use crate::FINANCIAL_DATABASE_URL;
 use chrono::{Datelike, Days, Local, NaiveDate, Weekday};
 use sqlx::{migrate::MigrateDatabase, sqlite::SqliteConnection, Connection, Sqlite};
 use std::io::Cursor;
 use std::path::Path;
 use strum::IntoEnumIterator;
+use tokio::runtime::Runtime;
 
 const BASE_CURRENCY: Currency = Currency::EUR;
 const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -284,5 +286,15 @@ impl FinancialDataBase {
         FinancialDataBase::init_currency_exchange(&mut connection).await?;
 
         Ok(FinancialDataBase { connection })
+    }
+}
+
+impl Default for FinancialDataBase {
+    fn default() -> Self {
+        Runtime::new().unwrap().block_on(async {
+            Self::init(FINANCIAL_DATABASE_URL)
+                .await
+                .expect("Pray Tux this never happens.")
+        })
     }
 }
