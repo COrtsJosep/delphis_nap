@@ -174,7 +174,7 @@ impl AppState {
                             });
                             if self.fund_stand_csv_correct{
                             strip.cell(|ui| {
-                                                TableBuilder::new(ui)
+                                TableBuilder::new(ui)
                                         .columns(Column::auto().resizable(true), match self.current_fund_stand_currency.clone() {Some(_c) => 4, None => 5})
                                         .striped(true)
                                         .cell_layout(Layout::right_to_left(Align::Center))
@@ -301,7 +301,7 @@ ui.label(format!("{:.2}", current_fund_stand_row.current_value));});
                                                     }
                                                 }
                                             }
-                                        }
+                                        };
                                     });
                                 ui.separator();
                             });

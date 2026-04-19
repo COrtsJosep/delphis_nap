@@ -12,8 +12,7 @@ const TEST_FINANCIAL_DATABASE_URL: &str = "sqlite://./data_fake/financial_databa
 const TEST_ORIGINAL_FINANCIAL_DATABASE_URL: &str =
     "sqlite://./data_fake/financial_database_original.sqlite";
 
-#[tokio::main]
-async fn main() -> eframe::Result {
+fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([360.0, 100.0]),
         ..Default::default()

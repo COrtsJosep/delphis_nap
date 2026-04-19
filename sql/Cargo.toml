@@ -21,3 +21,4 @@ egui = "0.32.3"
 egui_extras = { version = "0.32.3", features = ["datepicker", "svg", "all_loaders", "svg_text"] }
 egui_autocomplete = "11.0"
 derivative = "2.2.0"
+egui-async = "0.4.1"

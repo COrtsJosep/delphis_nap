@@ -12,6 +12,7 @@ use crate::financial_database::{
 use chrono::{Local, NaiveDate};
 use derivative::*;
 use eframe::egui;
+use egui_async;
 use egui_extras::{Size, StripBuilder};
 use sqlx::sqlite::SqliteRow;
 
@@ -109,6 +110,7 @@ pub struct AppState {
 impl eframe::App for AppState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) -> () {
         egui_extras::install_image_loaders(ctx);
+        //ctx.plugin_or_default::<egui_async::EguiAsyncPlugin>();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             StripBuilder::new(ui)
