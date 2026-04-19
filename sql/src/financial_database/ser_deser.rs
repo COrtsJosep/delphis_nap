@@ -1,9 +1,9 @@
 use crate::financial::*;
 use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
-use chrono::{Local, NaiveDate};
 use std::str::FromStr;
 use std::vec::IntoIter;
+use jiff::{civil::Date, Zoned};
 
 impl FinancialDataBase {
     pub(crate) async fn insert_account(&mut self, account: &Account) -> Result<i64, sqlx::Error> {
@@ -21,7 +21,7 @@ impl FinancialDataBase {
         let account_type: String = account.account_type().to_string();
         let account_initial_balance: f64 = account.initial_balance();
         let account_creation_date: String =
-            Local::now().date_naive().format(DATE_FORMAT).to_string();
+            Zoned::now().date().strftime(DATE_FORMAT).to_string();
         sqlx::query_file!(
             "src/queries/insertion/insert_into_accounts.sql",
             account_id,
@@ -52,7 +52,7 @@ impl FinancialDataBase {
         let entity_type: String = entity.entity_type().to_string();
         let entity_subtype: String = entity.entity_subtype();
         let entity_creation_date: String =
-            Local::now().date_naive().format(DATE_FORMAT).to_string();
+            Zoned::now().date().strftime(DATE_FORMAT).to_string();
         sqlx::query_file!(
             "src/queries/insertion/insert_into_entities.sql",
             entity_id,
@@ -77,7 +77,7 @@ impl FinancialDataBase {
             Err(_e) => 0i64,
         };
 
-        let party_creation_date: String = party.creation_date.format(DATE_FORMAT).to_string();
+        let party_creation_date: String = party.creation_date.strftime(DATE_FORMAT).to_string();
         sqlx::query_file!(
             "src/queries/insertion/insert_into_parties.sql",
             party_id,
@@ -117,7 +117,7 @@ impl FinancialDataBase {
                     Ok(id) => id.max_expense_id.unwrap() + 1i64,
                     Err(_e) => 0i64,
                 };
-                let expense_date: String = date.format(DATE_FORMAT).to_string();
+                let expense_date: String = date.strftime(DATE_FORMAT).to_string();
                 let expense_currency: String = currency.to_string();
                 sqlx::query_file!(
                     "src/queries/insertion/insert_into_expenses.sql",
@@ -151,7 +151,7 @@ impl FinancialDataBase {
                     Ok(id) => id.max_income_id.unwrap() + 1i64,
                     Err(_e) => 0i64,
                 };
-                let income_date: String = date.format(DATE_FORMAT).to_string();
+                let income_date: String = date.strftime(DATE_FORMAT).to_string();
                 let income_currency: String = currency.to_string();
                 sqlx::query_file!(
                     "src/queries/insertion/insert_into_incomes.sql",
@@ -183,7 +183,7 @@ impl FinancialDataBase {
                     Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
                     Err(_e) => 0i64,
                 };
-                let fund_movement_date: String = date.format(DATE_FORMAT).to_string();
+                let fund_movement_date: String = date.strftime(DATE_FORMAT).to_string();
                 let fund_movement_currency: String = currency.to_string();
                 sqlx::query_file!(
                     "src/queries/insertion/insert_into_fund_movements.sql",
@@ -213,7 +213,7 @@ impl FinancialDataBase {
                     Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
                     Err(_e) => 0i64,
                 };
-                let fund_movement_date: String = date.format(DATE_FORMAT).to_string();
+                let fund_movement_date: String = date.strftime(DATE_FORMAT).to_string();
                 let fund_movement_currency: String = currency.to_string();
                 let fund_movement_value: f64 = -1.0 * value;
                 sqlx::query_file!(
@@ -383,7 +383,7 @@ impl FinancialDataBase {
                 Transaction::Expense {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
                     category: row.category,
                     subcategory: row.subcategory,
                     description: row.description,
@@ -398,7 +398,7 @@ impl FinancialDataBase {
                 Transaction::Income {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
                     category: row.category,
                     subcategory: row.subcategory,
                     description: row.description,
@@ -416,7 +416,7 @@ impl FinancialDataBase {
                 Transaction::Credit {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
                     account_id: row.account_id,
                 }
             }
@@ -431,7 +431,7 @@ impl FinancialDataBase {
                 Transaction::Debit {
                     value: -1.0 * row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: NaiveDate::parse_from_str(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
                     account_id: row.account_id,
                 }
             }
@@ -560,7 +560,7 @@ mod tests {
             currency: String::from("CHF"),
             account_type: String::from("Deposit"),
             initial_balance: 1080.0f64,
-            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            creation_date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
         };
 
         financial_database.insert_account(&account).await.unwrap();
@@ -596,7 +596,7 @@ mod tests {
             country: String::from("Germany"),
             entity_type: String::from("Firm"),
             entity_subtype: String::from("Supermarket"),
-            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            creation_date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
         };
 
         financial_database.insert_entity(&entity).await.unwrap();
@@ -622,7 +622,7 @@ mod tests {
         let expense = Transaction::Expense {
             value: 100.0,
             currency: Currency::EUR,
-            date: Local::now().date_naive(),
+            date: Zoned::now().date(),
             category: String::from("Groceries"),
             subcategory: String::from("Food"),
             description: String::from("Weekly shopping"),
@@ -633,7 +633,7 @@ mod tests {
             expense_id: 262i64,
             value: 100.0f64,
             currency: String::from("EUR"),
-            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
             category: String::from("Groceries"),
             subcategory: String::from("Food"),
             description: String::from("Weekly shopping"),
@@ -669,7 +669,7 @@ mod tests {
         let income = Transaction::Income {
             value: 5000.0,
             currency: Currency::CHF,
-            date: Local::now().date_naive(),
+            date: Zoned::now().date(),
             category: String::from("Salary"),
             subcategory: String::from("Monthly"),
             description: String::from("March salary"),
@@ -680,7 +680,7 @@ mod tests {
             income_id: 12i64,
             value: 5000.0f64,
             currency: String::from("CHF"),
-            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
             category: String::from("Salary"),
             subcategory: String::from("Monthly"),
             description: String::from("March salary"),
@@ -714,7 +714,7 @@ mod tests {
         let credit = Transaction::Credit {
             value: 200.0,
             currency: Currency::CHF,
-            date: Local::now().date_naive(),
+            date: Zoned::now().date(),
             account_id: 0,
         };
 
@@ -723,7 +723,7 @@ mod tests {
             fund_movement_type: String::from("Credit"),
             value: 200.0f64,
             currency: String::from("CHF"),
-            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
             account_id: 0i64,
             party_id: 0i64,
         };
@@ -756,7 +756,7 @@ mod tests {
         let debit = Transaction::Debit {
             value: 100.0,
             currency: Currency::CHF,
-            date: Local::now().date_naive(),
+            date: Zoned::now().date(),
             account_id: 0,
         };
 
@@ -765,7 +765,7 @@ mod tests {
             fund_movement_type: String::from("Debit"),
             value: -100.0f64, // Note: Debit is stored as negative
             currency: String::from("CHF"),
-            date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
             account_id: 0i64,
             party_id: 0i64,
         };
@@ -797,12 +797,12 @@ mod tests {
 
         let mut party: Party = Party {
             transactions: vec![],
-            creation_date: Local::now().date_naive(),
+            creation_date: Zoned::now().date(),
         };
 
         let expected_party_record: PartyRecord = PartyRecord {
             party_id: 274i64,
-            creation_date: Local::now().date_naive().format(DATE_FORMAT).to_string(),
+            creation_date: Zoned::now().date().strftime(DATE_FORMAT).to_string(),
         };
 
         financial_database.insert_party(&mut party).await.unwrap();

@@ -1,6 +1,6 @@
 use crate::financial::Currency;
 use crate::financial_database::{FinancialDataBase, DATE_FORMAT};
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use sqlx::{sqlite::SqliteRow, Connection};
 use std::fmt::Display;
 use strum_macros::{EnumIter, EnumString};
@@ -73,12 +73,12 @@ impl FinancialDataBase {
     /// in the currency currency_to.
     async fn total_income(
         &mut self,
-        date_from: NaiveDate,
-        date_to: NaiveDate,
+        date_from: Date,
+        date_to: Date,
         currency_to: &Currency,
     ) -> Result<f64, sqlx::Error> {
-        let date_from_string: String = date_from.format(DATE_FORMAT).to_string();
-        let date_to_string: String = date_to.format(DATE_FORMAT).to_string();
+        let date_from_string: String = date_from.strftime(DATE_FORMAT).to_string();
+        let date_to_string: String = date_to.strftime(DATE_FORMAT).to_string();
         let currency_to_string: String = currency_to.to_string();
 
         let record = sqlx::query_file!(
@@ -121,12 +121,12 @@ impl FinancialDataBase {
     /// Generates a summary table of all expenses between date_from to date_to, expressed in the currency_to
     pub(crate) async fn expenses_summary(
         &mut self,
-        date_from: NaiveDate,
-        date_to: NaiveDate,
+        date_from: Date,
+        date_to: Date,
         currency_to: &Currency,
     ) -> Result<Vec<ExpenseSummaryRow>, sqlx::Error> {
         let total_income: f64 = self.total_income(date_from, date_to, currency_to).await?;
-        let num_days: i64 = date_to.signed_duration_since(date_from).num_days();
+        let num_days: i64 = date_from.duration_until(date_to).as_hours() / 24i64;
         let date_from_string: String = date_from.to_string();
         let date_to_string: String = date_to.to_string();
         let currency_to_string: String = currency_to.to_string();

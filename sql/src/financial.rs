@@ -1,4 +1,4 @@
-use chrono::prelude::*;
+use jiff::{civil::Date, Zoned};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::slice::Iter;
@@ -11,14 +11,14 @@ use strum_macros::{EnumIter, EnumString};
 /// touch to the code.
 pub struct Party {
     pub transactions: Vec<Transaction>,
-    pub creation_date: NaiveDate,
+    pub creation_date: Date,
 }
 
 impl Party {
     pub fn new(transactions: Vec<Transaction>) -> Party {
         Party {
             transactions,
-            creation_date: Local::now().date_naive(),
+            creation_date: Zoned::now().date(),
         }
     }
 
@@ -128,7 +128,7 @@ pub enum Transaction {
     Income {
         value: f64,
         currency: Currency,
-        date: NaiveDate,
+        date: Date,
         category: String,    // salary, interest
         subcategory: String, // regular salary, 13-month salary
         description: String,
@@ -137,7 +137,7 @@ pub enum Transaction {
     Expense {
         value: f64,
         currency: Currency,
-        date: NaiveDate,
+        date: Date,
         category: String,    // utilities, rent, transport
         subcategory: String, // train, bus, hairdresser
         description: String,
@@ -146,13 +146,13 @@ pub enum Transaction {
     Credit {
         value: f64,
         currency: Currency,
-        date: NaiveDate,
+        date: Date,
         account_id: i64,
     },
     Debit {
         value: f64,
         currency: Currency,
-        date: NaiveDate,
+        date: Date,
         account_id: i64,
     },
 }
@@ -189,7 +189,7 @@ impl Transaction {
     }
 
     /// Date getter.
-    pub(crate) fn date(&self) -> &NaiveDate {
+    pub(crate) fn date(&self) -> &Date {
         match self {
             Transaction::Income { date, .. }
             | Transaction::Expense { date, .. }

@@ -9,11 +9,11 @@ use crate::financial_database::{
     plotter::BarplotType, summaries::CurrentFundStandRow, summaries::ExpenseSummaryRow,
     summaries::TimeUnit, views::FundMovementView, views::TransactionView, FinancialDataBase,
 };
-use chrono::{Local, NaiveDate};
 use derivative::*;
 use eframe::egui;
 use egui_async;
 use egui_extras::{Size, StripBuilder};
+use jiff::{civil::Date, Zoned};
 use sqlx::sqlite::SqliteRow;
 
 const WINDOW_HEIGHT: f32 = 400.0;
@@ -56,8 +56,8 @@ pub struct AppState {
     transaction_value: f64,
     transaction_value_tentative: String,
     transaction_currency: Currency,
-    #[derivative(Default(value = "Local::now().date_naive()"))]
-    transaction_date: NaiveDate,
+    #[derivative(Default(value = "Zoned::now().date()"))]
+    transaction_date: Date,
     transaction_category: String,
     transaction_subcategory: String,
     transaction_description: String,
@@ -70,10 +70,10 @@ pub struct AppState {
 
     expense_summary_csv: String,
     expense_summary_csv_correct: bool,
-    #[derivative(Default(value = "Local::now().date_naive()"))]
-    expense_summary_date_from: NaiveDate,
-    #[derivative(Default(value = "Local::now().date_naive()"))]
-    expense_summary_date_to: NaiveDate,
+    #[derivative(Default(value = "Zoned::now().date()"))]
+    expense_summary_date_from: Date,
+    #[derivative(Default(value = "Zoned::now().date()"))]
+    expense_summary_date_to: Date,
     expense_summary_currency: Currency,
     expense_summary_rows: Vec<ExpenseSummaryRow>,
 
@@ -110,9 +110,9 @@ pub struct AppState {
 impl eframe::App for AppState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) -> () {
         egui_extras::install_image_loaders(ctx);
-        //ctx.plugin_or_default::<egui_async::EguiAsyncPlugin>();
+        ctx.plugin_or_default::<egui_async::EguiAsyncPlugin>();
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ctx, |ui| {
             StripBuilder::new(ui)
                 .size(Size::exact(20.0))
                 .vertical(|mut strip| {

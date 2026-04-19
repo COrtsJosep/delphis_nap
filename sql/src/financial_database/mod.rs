@@ -7,7 +7,7 @@ pub mod views;
 use crate::financial::Currency;
 use crate::table_records::*;
 use crate::FINANCIAL_DATABASE_URL;
-use chrono::{Datelike, Days, Local, NaiveDate, Weekday};
+use jiff::{Zoned, civil::Date, civil::Weekday};
 use sqlx::{migrate::MigrateDatabase, sqlite::SqliteConnection, Connection, Sqlite};
 use std::io::Cursor;
 use std::path::Path;
@@ -199,7 +199,7 @@ impl FinancialDataBase {
                 },
                 Err(_e) => String::from("1999-01-04"), // start of the time series
             };
-        let today: String = Local::now().date_naive().format(DATE_FORMAT).to_string();
+        let today: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
 
         if last_date >= today {
             return Ok(());
@@ -229,19 +229,19 @@ impl FinancialDataBase {
             let mut value: f64 = 1.0;
             for record in reader.deserialize() {
                 let ecb_record: ECBRecord = record.unwrap();
-                let record_date: NaiveDate =
-                    NaiveDate::parse_from_str(ecb_record.date.as_str(), "%Y-%m-%d").unwrap();
-                let mut dates: Vec<NaiveDate> = vec![record_date];
-                if record_date.weekday() == Weekday::Fri {
-                    dates.push(record_date.checked_add_days(Days::new(1)).unwrap());
-                    dates.push(record_date.checked_add_days(Days::new(2)).unwrap());
+                let record_date: Date =
+                    Date::strptime(ecb_record.date.as_str(), "%Y-%m-%d").unwrap();
+                let mut dates: Vec<Date> = vec![record_date];
+                if record_date.weekday() == Weekday::Friday {
+                    dates.push(record_date.tomorrow().unwrap());
+                    dates.push(record_date.tomorrow().unwrap().tomorrow().unwrap());
                 }
                 value = ecb_record.value.unwrap_or(value);
 
                 for date in dates {
                     for _ in 0..2 {
                         // add from->to value, and then add to->from 1/value
-                        let date_string: String = date.format(DATE_FORMAT).to_string();
+                        let date_string: String = date.strftime(DATE_FORMAT).to_string();
                         let id: String =
                             format!("{}_{}_{}", date_string, currency_from, currency_to,);
                         sqlx::query_file!(

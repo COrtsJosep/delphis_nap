@@ -14,7 +14,8 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| ui.label(self.error_message.clone()));
+                egui::CentralPanel::default()
+                    .show_inside(ctx, |ui| ui.label(self.error_message.clone()));
                 if ctx.input(|i| i.viewport().close_requested()) {
                     self.show_error_window = false;
                 }

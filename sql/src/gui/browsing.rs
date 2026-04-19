@@ -32,7 +32,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
                         .size(Size::remainder().at_least(120.0))
@@ -161,7 +161,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
                         .size(Size::remainder().at_least(120.0))

@@ -97,7 +97,7 @@ impl AppState {
                     class == egui::ViewportClass::Immediate,
                     "This egui backend doesn't support multiple viewports"
                 );
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     egui::Grid::new("my_grid")
                         .num_columns(3)
                         .spacing([45.0, 4.0])
@@ -232,7 +232,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     egui::Grid::new("my_grid")
                         .num_columns(3)
                         .spacing([45.0, 4.0])
@@ -377,7 +377,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
                         .size(Size::remainder().at_least(100.0))
@@ -613,7 +613,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     egui::Grid::new("my_grid")
                         .num_columns(3)
                         .spacing([45.0, 4.0])

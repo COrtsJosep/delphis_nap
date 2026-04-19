@@ -20,7 +20,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
                         .size(Size::remainder().at_least(120.0))
@@ -125,7 +125,7 @@ impl AppState {
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     let currency_label: String = self.current_fund_stand_currency.clone().map_or("None".to_string(), |currency| currency.to_string());
 
 
@@ -231,7 +231,7 @@ ui.label(format!("{:.2}", current_fund_stand_row.current_value));});
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ctx, |ui| {
                     let currency_label: String = self.expenses_evolution_currency.to_string();
                     let time_unit_label: String = self.expenses_evolution_time_unit.to_string();
 

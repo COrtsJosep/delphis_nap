@@ -2,12 +2,16 @@ use crate::financial::Currency;
 use crate::financial_database::palettes::fetch_palette;
 use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use plotters::prelude::*;
 use sqlx::Connection;
 use std::collections::HashMap;
 use std::fmt::Display;
 use strum_macros::EnumIter;
+use plotters::coord::ranged1d;
+use ranged1d::{Ranged, DefaultFormatting, KeyPointHint};
+use std::ops::Range;
+use jiff::ToSpan;
 
 #[derive(EnumIter, Eq, PartialEq)]
 pub(crate) enum BarplotType {
@@ -46,6 +50,67 @@ impl BarplotType {
     }
 }
 
+#[derive(Clone)]
+pub struct RangedJiffDate(Date, Date);
+
+impl From<Range<Date>> for RangedJiffDate {
+    fn from(range: Range<Date>) -> Self {
+        Self(range.start, range.end)
+    }
+}
+
+impl Ranged for RangedJiffDate {
+    type FormatOption = DefaultFormatting;
+    type ValueType = Date;
+
+    fn range(&self) -> Range<Date> {
+        self.0.clone()..self.1.clone()
+    }
+
+    fn map(&self, value: &Self::ValueType, limit: (i32, i32)) -> i32 {
+        let value_hours: i32 = self.0.duration_until(*value).as_hours() as i32;
+        let total_hours: i32 = self.0.duration_until(self.1).as_hours() as i32;
+        
+        ((limit.1 - limit.0) * value_hours / total_hours) + limit.0
+    }
+
+    fn key_points<HintType: KeyPointHint>(&self, hint: HintType) -> Vec<Self::ValueType> {
+        let max_points = hint.max_num_points();
+        let mut ret = vec![];
+
+        let total_days: i64 = self.0.clone().duration_until(self.1.clone()).as_hours() / 24i64;
+        let total_weeks: i64 = total_days / 7i64;
+
+        if total_days > 0 && total_days as usize <= max_points {
+            for day_idx in 0..=total_days {
+                ret.push(self.0.clone() + day_idx.days());
+            }
+            return ret;
+        }
+
+        if total_weeks > 0 && total_weeks as usize <= max_points {
+            for day_idx in 0..=total_weeks {
+                ret.push(self.0.clone() + day_idx.weeks());
+            }
+            return ret;
+        }
+
+        // When all data is in the same week, just plot properly.
+        if total_weeks == 0 {
+            ret.push(self.0.clone());
+            return ret;
+        }
+
+        let week_per_point = ((total_weeks as f64) / (max_points as f64)).ceil() as usize;
+
+        for idx in 0..=(total_weeks as usize / week_per_point) {
+            ret.push(self.0.clone() + ((idx * week_per_point) as i64).weeks());
+        }
+
+        ret
+    }
+}
+
 impl FinancialDataBase {
     // Writes a funds evolution plot, with x-axis
     // date, and y-axis total funds.
@@ -63,11 +128,11 @@ impl FinancialDataBase {
         .fetch_all(&mut self.connection)
         .await?;
 
-        let mut dates: Vec<NaiveDate> = vec![];
+        let mut dates: Vec<Date> = vec![];
         let mut fund_values: Vec<f64> = vec![];
         let mut bankrupcy_values: Vec<f64> = vec![];
         for record in records {
-            dates.push(NaiveDate::parse_from_str(record.date.as_str(), DATE_FORMAT).unwrap());
+            dates.push(Date::strptime(record.date.as_str(), DATE_FORMAT).unwrap());
             fund_values.push(record.value);
             bankrupcy_values.push(0.0);
         }
@@ -81,7 +146,7 @@ impl FinancialDataBase {
             .set_label_area_size(LabelAreaPosition::Left, 60)
             .set_label_area_size(LabelAreaPosition::Bottom, 60)
             .build_cartesian_2d(
-                dates[0]..dates[dates.len() - 1],
+                RangedJiffDate::from(dates[0]..dates[dates.len() - 1]),
                 0.0..fund_values.iter().cloned().fold(0. / 0., f64::max),
             )
             .unwrap();
