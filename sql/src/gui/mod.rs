@@ -10,11 +10,13 @@ use crate::financial_database::{
     summaries::TimeUnit, views::FundMovementView, views::TransactionView, FinancialDataBase,
 };
 use derivative::*;
-use eframe::egui;
+use eframe::{Frame, App, egui};
 use egui_async;
 use egui_extras::{Size, StripBuilder};
 use jiff::{civil::Date, Zoned};
 use sqlx::sqlite::SqliteRow;
+use egui::{Ui};
+use egui_async::Bind;
 
 const WINDOW_HEIGHT: f32 = 400.0;
 const WINDOW_WIDTH: f32 = 600.0;
@@ -102,17 +104,19 @@ pub struct AppState {
     browse_account_string: String,
 
     fund_evolution_plot_currency: Currency,
+    fund_evolution_plot_bind: Bind<(), sqlx::Error>,
 
     expense_category_plot_currency: Currency,
     expense_category_plot_type: BarplotType,
 }
 
-impl eframe::App for AppState {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) -> () {
-        egui_extras::install_image_loaders(ctx);
+impl App for AppState {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.plugin_or_default::<egui_async::EguiAsyncPlugin>();
-
-        egui::CentralPanel::default().show_inside(ctx, |ui| {
+    }
+    
+    fn ui(&mut self, ui: &mut Ui, frame: &mut Frame) -> () {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             StripBuilder::new(ui)
                 .size(Size::exact(20.0))
                 .vertical(|mut strip| {
@@ -162,51 +166,51 @@ impl eframe::App for AppState {
         });
 
         if self.show_input_entity_window {
-            self.handle_show_input_entity_window(ctx);
+            self.handle_show_input_entity_window(ui);
         }
 
         if self.show_input_account_window {
-            self.handle_show_input_account_window(ctx);
+            self.handle_show_input_account_window(ui);
         }
 
         if self.show_input_party_window {
-            self.handle_show_input_party_window(ctx);
+            self.handle_show_input_party_window(ui);
         }
 
         if self.show_input_transaction_window {
-            self.handle_show_input_transaction_window(ctx);
+            self.handle_show_input_transaction_window(ui);
         }
 
         if self.show_expense_summary_window {
-            self.handle_show_expense_summary_window(ctx)
+            self.handle_show_expense_summary_window(ui)
         }
 
         if self.show_fund_stand_window {
-            self.handle_show_fund_stand_window(ctx)
+            self.handle_show_fund_stand_window(ui)
         }
 
         if self.show_expenses_evolution_window {
-            self.handle_show_expenses_evolution_window(ctx)
+            self.handle_show_expenses_evolution_window(ui)
         }
 
         if self.show_browse_last_transactions_window {
-            self.handle_show_browse_last_transactions_window(ctx)
+            self.handle_show_browse_last_transactions_window(ui)
         }
 
         if self.show_browse_last_fund_movements_window {
-            self.handle_show_browse_last_fund_movements_window(ctx);
+            self.handle_show_browse_last_fund_movements_window(ui);
         }
 
         if self.show_fund_evolution_plot_window {
-            self.handle_show_fund_evolution_plot(ctx);
+            self.handle_show_fund_evolution_plot(ui);
         }
 
         if self.show_expense_category_plot_window {
-            self.handle_show_expense_category_plot(ctx);
+            self.handle_show_expense_category_plot(ui);
         }
 
         if self.show_error_window {
-            self.handle_show_error_window(ctx);
+            self.handle_show_error_window(ui);
         }
     }
 }

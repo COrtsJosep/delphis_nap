@@ -1,5 +1,5 @@
 select 
-	currency_exchanges_from_eur.date as "date!",
+	currency_exchanges_to_eur.date as "date!",
 	sum(  -- outer sum: does the cumsum
 		sum(  -- inner sum: does the groupby sum by date
 			(
@@ -9,7 +9,7 @@ select
 			* (case when currency_exchanges_to_eur.value is null then 1.0 else currency_exchanges_to_eur.value end) 
 			* (case when currency_exchanges_from_eur.value is null then 1.0 else currency_exchanges_from_eur.value end) 
 		)
-	) over (order by currency_exchanges_from_eur.date) as "value!"	
+	) over (order by currency_exchanges_to_eur.date) as "value!"	
 from
 	currency_exchanges as currency_exchanges_to_eur
 	left join currency_exchanges as currency_exchanges_from_eur
@@ -28,5 +28,5 @@ from
 where
 	currency_exchanges_to_eur.date >= min((select min(creation_date) from accounts), (select min(date) from fund_movements))
 	and currency_exchanges_to_eur.date <= max((select max(creation_date) from accounts), (select max(date) from fund_movements)) 
-group by currency_exchanges_from_eur.date
-order by currency_exchanges_from_eur.date asc
+group by currency_exchanges_to_eur.date
+order by currency_exchanges_to_eur.date asc

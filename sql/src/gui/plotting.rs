@@ -3,23 +3,33 @@ use crate::financial_database::plotter::BarplotType;
 use crate::gui::{AppState, WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui;
 use eframe::egui::ComboBox;
+use egui_async::egui::AsyncButton;
 use egui_extras::*;
 use strum::IntoEnumIterator;
+//
+use crate::financial_database::FinancialDataBase;
+
+async fn plot_fund_evolution(
+    financial_database: FinancialDataBase,
+    currency_to: Currency,
+) -> Result<(), sqlx::Error> {
+    financial_database.funds_evolution(&currency_to).await
+}
 
 impl AppState {
-    pub fn handle_show_fund_evolution_plot(&mut self, ctx: &egui::Context) -> () {
-        ctx.show_viewport_immediate(
+    pub fn handle_show_fund_evolution_plot(&mut self, ui: &mut egui::Ui) -> () {
+        ui.ctx().show_viewport_immediate(
             egui::ViewportId::from_hash_of("fund_evolution_plot_window"),
             egui::ViewportBuilder::default()
                 .with_title("Fund evolution plot window")
                 .with_inner_size([WINDOW_WIDTH, WINDOW_HEIGHT]),
-            |ctx, class| {
+            |ui, class| {
                 assert!(
                     class == egui::ViewportClass::Immediate,
                     "This egui backend doesn't support multiple viewports"
                 );
 
-                egui::CentralPanel::default().show_inside(ctx, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
                         .size(Size::remainder().at_least(120.0))
@@ -51,24 +61,15 @@ impl AppState {
                                         ui.end_row();
 
                                         ui.label("");
-                                        if ui.button("Generate!").clicked() {
-                                            async {
-                                                match self
-                                                    .financial_database
-                                                    .funds_evolution(
-                                                        &self.fund_evolution_plot_currency,
-                                                    )
-                                                    .await
-                                                {
-                                                    Ok(_) => {}
-                                                    Err(e) => {
-                                                        self.throw_sqlx_error(e);
-                                                    }
-                                                }
-                                            };
-                                            // forget the old one
-                                            ui.ctx().forget_all_images();
-                                        }
+
+                                        let db = self.financial_database.clone();
+                                        let curr = self.fund_evolution_plot_currency.clone();
+                                        AsyncButton::new(
+                                            &mut self.fund_evolution_plot_bind,
+                                            "Generate!",
+                                        )
+                                        .pending_text("Generating...")
+                                        .show(ui, || plot_fund_evolution(db, curr));
                                     });
                                 ui.separator();
                             });
@@ -78,7 +79,7 @@ impl AppState {
                             });
                         });
                 });
-                if ctx.input(|i| i.viewport().close_requested()) {
+                if ui.ctx().input(|i| i.viewport().close_requested()) {
                     self.show_fund_evolution_plot_window = false;
                 }
             },

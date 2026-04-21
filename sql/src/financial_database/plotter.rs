@@ -3,15 +3,14 @@ use crate::financial_database::palettes::fetch_palette;
 use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
 use jiff::civil::Date;
+use jiff::ToSpan;
+use plotters::coord::ranged1d;
 use plotters::prelude::*;
-use sqlx::Connection;
+use ranged1d::{DefaultFormatting, KeyPointHint, Ranged};
 use std::collections::HashMap;
 use std::fmt::Display;
-use strum_macros::EnumIter;
-use plotters::coord::ranged1d;
-use ranged1d::{Ranged, DefaultFormatting, KeyPointHint};
 use std::ops::Range;
-use jiff::ToSpan;
+use strum_macros::EnumIter;
 
 #[derive(EnumIter, Eq, PartialEq)]
 pub(crate) enum BarplotType {
@@ -70,7 +69,7 @@ impl Ranged for RangedJiffDate {
     fn map(&self, value: &Self::ValueType, limit: (i32, i32)) -> i32 {
         let value_hours: i32 = self.0.duration_until(*value).as_hours() as i32;
         let total_hours: i32 = self.0.duration_until(self.1).as_hours() as i32;
-        
+
         ((limit.1 - limit.0) * value_hours / total_hours) + limit.0
     }
 
@@ -114,10 +113,7 @@ impl Ranged for RangedJiffDate {
 impl FinancialDataBase {
     // Writes a funds evolution plot, with x-axis
     // date, and y-axis total funds.
-    pub(crate) async fn funds_evolution(
-        &mut self,
-        currency_to: &Currency,
-    ) -> Result<(), sqlx::Error> {
+    pub(crate) async fn funds_evolution(&self, currency_to: &Currency) -> Result<(), sqlx::Error> {
         let currency_to_string: String = currency_to.to_string();
 
         // First fetch the values
@@ -125,19 +121,20 @@ impl FinancialDataBase {
             "src/queries/plots/plot_funds_evolution.sql",
             currency_to_string
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(&self.pool)
         .await?;
 
         let mut dates: Vec<Date> = vec![];
         let mut fund_values: Vec<f64> = vec![];
         let mut bankrupcy_values: Vec<f64> = vec![];
         for record in records {
-            dates.push(Date::strptime(record.date.as_str(), DATE_FORMAT).unwrap());
+            dates.push(Date::strptime(DATE_FORMAT, record.date.as_str()).unwrap());
             fund_values.push(record.value);
             bankrupcy_values.push(0.0);
         }
 
         // Then create the plot
+        std::fs::create_dir_all("figures").unwrap();
         let root = SVGBackend::new("figures/funds_evolution.svg", (800, 640)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
@@ -198,13 +195,13 @@ impl FinancialDataBase {
     // Creates a stacked barplot of monthly expenses. One column per month, split into
     // expense categories.
     pub(crate) async fn monthly_expenses(
-        &mut self,
+        &self,
         currency_to: &Currency,
         barplot_type: &BarplotType,
     ) -> Result<(), sqlx::Error> {
         let currency_to_string: String = currency_to.to_string();
 
-        let mut transaction = self.connection.begin().await?;
+        let mut transaction = self.pool.begin().await?;
         match barplot_type {
             BarplotType::ABSOLUTE => {
                 sqlx::query_file!(

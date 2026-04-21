@@ -26,7 +26,7 @@ pub(crate) struct FundMovementView {
 impl FinancialDataBase {
     /// Returns a csv in String format with the last n transactions.
     pub(crate) async fn last_transactions(
-        &mut self,
+        &self,
         n: i64,
     ) -> Result<Vec<TransactionView>, sqlx::Error> {
         sqlx::query_file_as!(
@@ -34,13 +34,13 @@ impl FinancialDataBase {
             "src/queries/views/view_last_transactions.sql",
             n
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(&self.pool)
         .await
     }
 
     /// Returns a csv in String format with the last n fund movements.
     pub(crate) async fn last_fund_movements(
-        &mut self,
+        &self,
         n: i64,
         account_id: i64,
     ) -> Result<Vec<FundMovementView>, sqlx::Error> {
@@ -51,7 +51,7 @@ impl FinancialDataBase {
                 account_id,
                 n
             )
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await
         } else {
             sqlx::query_file_as!(
@@ -59,7 +59,7 @@ impl FinancialDataBase {
                 "src/queries/views/view_last_fund_movements_unfiltered.sql",
                 n
             )
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await
         }
     }

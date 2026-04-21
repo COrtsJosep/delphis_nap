@@ -1,14 +1,14 @@
 use crate::financial::*;
 use crate::financial_database::DATE_FORMAT;
 use crate::FinancialDataBase;
+use jiff::{civil::Date, Zoned};
 use std::str::FromStr;
 use std::vec::IntoIter;
-use jiff::{civil::Date, Zoned};
 
 impl FinancialDataBase {
-    pub(crate) async fn insert_account(&mut self, account: &Account) -> Result<i64, sqlx::Error> {
+    pub(crate) async fn insert_account(&self, account: &Account) -> Result<i64, sqlx::Error> {
         let query_result = sqlx::query!("select max(account_id) as max_account_id from accounts")
-            .fetch_one(&mut self.connection)
+            .fetch_one(&self.pool)
             .await;
         let account_id: i64 = match query_result {
             Ok(id) => id.max_account_id.unwrap() + 1i64,
@@ -20,8 +20,7 @@ impl FinancialDataBase {
         let account_currency: String = account.currency().to_string();
         let account_type: String = account.account_type().to_string();
         let account_initial_balance: f64 = account.initial_balance();
-        let account_creation_date: String =
-            Zoned::now().date().strftime(DATE_FORMAT).to_string();
+        let account_creation_date: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
         sqlx::query_file!(
             "src/queries/insertion/insert_into_accounts.sql",
             account_id,
@@ -32,15 +31,15 @@ impl FinancialDataBase {
             account_initial_balance,
             account_creation_date,
         )
-        .execute(&mut self.connection)
+        .execute(&self.pool)
         .await?;
 
         Ok(account_id)
     }
 
-    pub(crate) async fn insert_entity(&mut self, entity: &Entity) -> Result<i64, sqlx::Error> {
+    pub(crate) async fn insert_entity(&self, entity: &Entity) -> Result<i64, sqlx::Error> {
         let query_result = sqlx::query!("select max(entity_id) as max_entity_id from entities")
-            .fetch_one(&mut self.connection)
+            .fetch_one(&self.pool)
             .await;
         let entity_id: i64 = match query_result {
             Ok(id) => id.max_entity_id.unwrap() + 1i64,
@@ -51,8 +50,7 @@ impl FinancialDataBase {
         let entity_country: String = entity.country();
         let entity_type: String = entity.entity_type().to_string();
         let entity_subtype: String = entity.entity_subtype();
-        let entity_creation_date: String =
-            Zoned::now().date().strftime(DATE_FORMAT).to_string();
+        let entity_creation_date: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
         sqlx::query_file!(
             "src/queries/insertion/insert_into_entities.sql",
             entity_id,
@@ -62,15 +60,15 @@ impl FinancialDataBase {
             entity_subtype,
             entity_creation_date,
         )
-        .execute(&mut self.connection)
+        .execute(&self.pool)
         .await?;
 
         Ok(entity_id)
     }
 
-    pub(crate) async fn insert_party(&mut self, party: &mut Party) -> Result<(), sqlx::Error> {
+    pub(crate) async fn insert_party(&self, party: &mut Party) -> Result<(), sqlx::Error> {
         let query_result = sqlx::query!("select max(party_id) as max_party_id from parties")
-            .fetch_one(&mut self.connection)
+            .fetch_one(&self.pool)
             .await;
         let party_id: i64 = match query_result {
             Ok(id) => id.max_party_id.unwrap() + 1i64,
@@ -83,7 +81,7 @@ impl FinancialDataBase {
             party_id,
             party_creation_date
         )
-        .execute(&mut self.connection)
+        .execute(&self.pool)
         .await?;
 
         for transaction in party.iter() {
@@ -95,7 +93,7 @@ impl FinancialDataBase {
 
     // sorry for the long method
     async fn insert_transaction(
-        &mut self,
+        &self,
         transaction: &Transaction,
         party_id: i64,
     ) -> Result<(), sqlx::Error> {
@@ -111,7 +109,7 @@ impl FinancialDataBase {
             } => {
                 let query_result =
                     sqlx::query!("select max(expense_id) as max_expense_id from expenses")
-                        .fetch_one(&mut self.connection)
+                        .fetch_one(&self.pool)
                         .await;
                 let expense_id: i64 = match query_result {
                     Ok(id) => id.max_expense_id.unwrap() + 1i64,
@@ -131,7 +129,7 @@ impl FinancialDataBase {
                     entity_id,
                     party_id,
                 )
-                .execute(&mut self.connection)
+                .execute(&self.pool)
                 .await?;
             }
             Transaction::Income {
@@ -145,7 +143,7 @@ impl FinancialDataBase {
             } => {
                 let query_result =
                     sqlx::query!("select max(income_id) as max_income_id from incomes")
-                        .fetch_one(&mut self.connection)
+                        .fetch_one(&self.pool)
                         .await;
                 let income_id: i64 = match query_result {
                     Ok(id) => id.max_income_id.unwrap() + 1i64,
@@ -165,7 +163,7 @@ impl FinancialDataBase {
                     entity_id,
                     party_id,
                 )
-                .execute(&mut self.connection)
+                .execute(&self.pool)
                 .await?;
             }
             Transaction::Credit {
@@ -177,7 +175,7 @@ impl FinancialDataBase {
                 let query_result = sqlx::query!(
                     "select max(fund_movement_id) as max_fund_movement_id from fund_movements"
                 )
-                .fetch_one(&mut self.connection)
+                .fetch_one(&self.pool)
                 .await;
                 let fund_movement_id: i64 = match query_result {
                     Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
@@ -195,7 +193,7 @@ impl FinancialDataBase {
                     account_id,
                     party_id,
                 )
-                .execute(&mut self.connection)
+                .execute(&self.pool)
                 .await?;
             }
             Transaction::Debit {
@@ -207,7 +205,7 @@ impl FinancialDataBase {
                 let query_result = sqlx::query!(
                     "select max(fund_movement_id) as max_fund_movement_id from fund_movements"
                 )
-                .fetch_one(&mut self.connection)
+                .fetch_one(&self.pool)
                 .await;
                 let fund_movement_id: i64 = match query_result {
                     Ok(id) => id.max_fund_movement_id.unwrap() + 1i64,
@@ -226,25 +224,25 @@ impl FinancialDataBase {
                     account_id,
                     party_id,
                 )
-                .execute(&mut self.connection)
+                .execute(&self.pool)
                 .await?;
             }
         }
         Ok(())
     }
 
-    pub(crate) async fn iter_entity_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
+    pub(crate) async fn iter_entity_ids(&self) -> Result<IntoIter<i64>, sqlx::Error> {
         let rows = sqlx::query!("select entity_id from entities order by name asc limit 20")
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await?;
 
         let entity_ids: Vec<i64> = rows.into_iter().map(|r| r.entity_id).collect();
         Ok(entity_ids.into_iter())
     }
 
-    pub(crate) async fn entity(&mut self, entity_id: i64) -> Result<Entity, sqlx::Error> {
+    pub(crate) async fn entity(&self, entity_id: i64) -> Result<Entity, sqlx::Error> {
         let row = sqlx::query!("select * from entities where entity_id = ?", entity_id)
-            .fetch_one(&mut self.connection)
+            .fetch_one(&self.pool)
             .await?;
 
         let entity: Entity = Entity::new(
@@ -257,38 +255,38 @@ impl FinancialDataBase {
         Ok(entity)
     }
 
-    pub(crate) async fn entity_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
+    pub(crate) async fn entity_countries(&self) -> Result<Vec<String>, sqlx::Error> {
         let rows = sqlx::query!("select distinct country from entities order by country asc")
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await?;
 
         let entity_countries = rows.into_iter().map(|r| r.country).collect();
         Ok(entity_countries)
     }
 
-    pub(crate) async fn entity_subtypes(&mut self) -> Result<Vec<String>, sqlx::Error> {
+    pub(crate) async fn entity_subtypes(&self) -> Result<Vec<String>, sqlx::Error> {
         let rows = sqlx::query!(
             "select distinct entity_subtype from entities order by entity_subtype asc"
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(&self.pool)
         .await?;
 
         let entity_subtypes = rows.into_iter().map(|r| r.entity_subtype).collect();
         Ok(entity_subtypes)
     }
 
-    pub(crate) async fn iter_account_ids(&mut self) -> Result<IntoIter<i64>, sqlx::Error> {
+    pub(crate) async fn iter_account_ids(&self) -> Result<IntoIter<i64>, sqlx::Error> {
         let rows = sqlx::query!("select account_id from accounts order by name asc")
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await?;
 
         let account_ids: Vec<i64> = rows.into_iter().map(|r| r.account_id).collect();
         Ok(account_ids.into_iter())
     }
 
-    pub(crate) async fn account(&mut self, account_id: i64) -> Result<Account, sqlx::Error> {
+    pub(crate) async fn account(&self, account_id: i64) -> Result<Account, sqlx::Error> {
         let row = sqlx::query!("select * from accounts where account_id = ?", account_id)
-            .fetch_one(&mut self.connection)
+            .fetch_one(&self.pool)
             .await?;
 
         let account: Account = Account::new(
@@ -302,9 +300,9 @@ impl FinancialDataBase {
         Ok(account)
     }
 
-    pub(crate) async fn account_countries(&mut self) -> Result<Vec<String>, sqlx::Error> {
+    pub(crate) async fn account_countries(&self) -> Result<Vec<String>, sqlx::Error> {
         let rows = sqlx::query!("select distinct country from accounts order by country asc")
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await?;
 
         let account_countries = rows.into_iter().map(|r| r.country).collect();
@@ -312,21 +310,21 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn transaction_categories(
-        &mut self,
+        &self,
         transaction_type: &TransactionType,
     ) -> Result<Vec<String>, sqlx::Error> {
         let transaction_categories = match transaction_type {
             TransactionType::Income => {
                 let rows =
                     sqlx::query!("select distinct category from incomes order by category asc")
-                        .fetch_all(&mut self.connection)
+                        .fetch_all(&self.pool)
                         .await?;
                 rows.into_iter().map(|r| r.category).collect()
             }
             TransactionType::Expense => {
                 let rows =
                     sqlx::query!("select distinct category from expenses order by category asc")
-                        .fetch_all(&mut self.connection)
+                        .fetch_all(&self.pool)
                         .await?;
                 rows.into_iter().map(|r| r.category).collect()
             }
@@ -337,7 +335,7 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn transaction_subcategories(
-        &mut self,
+        &self,
         transaction_type: &TransactionType,
         category: String,
     ) -> Result<Vec<String>, sqlx::Error> {
@@ -347,7 +345,7 @@ impl FinancialDataBase {
                         "select distinct subcategory from incomes where category = ? order by subcategory asc",
                         category
                     )
-                    .fetch_all(&mut self.connection)
+                    .fetch_all(&self.pool)
                     .await?;
                 rows.into_iter().map(|r| r.subcategory).collect()
             }
@@ -356,7 +354,7 @@ impl FinancialDataBase {
                         "select distinct subcategory from expenses where category = ? order by subcategory asc",
                         category
                     )
-                    .fetch_all(&mut self.connection)
+                    .fetch_all(&self.pool)
                     .await?;
                 rows.into_iter().map(|r| r.subcategory).collect()
             }
@@ -367,7 +365,7 @@ impl FinancialDataBase {
     }
 
     async fn transaction(
-        &mut self,
+        &self,
         transaction_type: TransactionType,
         transaction_id: i64,
     ) -> Result<Transaction, sqlx::Error> {
@@ -377,7 +375,7 @@ impl FinancialDataBase {
                     "select * from expenses where expense_id = ?",
                     transaction_id
                 )
-                .fetch_one(&mut self.connection)
+                .fetch_one(&self.pool)
                 .await?;
 
                 Transaction::Expense {
@@ -392,7 +390,7 @@ impl FinancialDataBase {
             }
             TransactionType::Income => {
                 let row = sqlx::query!("select * from incomes where income_id = ?", transaction_id)
-                    .fetch_one(&mut self.connection)
+                    .fetch_one(&self.pool)
                     .await?;
 
                 Transaction::Income {
@@ -410,7 +408,7 @@ impl FinancialDataBase {
                     "select * from fund_movements where fund_movement_id = ?",
                     transaction_id
                 )
-                .fetch_one(&mut self.connection)
+                .fetch_one(&self.pool)
                 .await?;
 
                 Transaction::Credit {
@@ -425,7 +423,7 @@ impl FinancialDataBase {
                     "select * from fund_movements where fund_movement_id = ?",
                     transaction_id
                 )
-                .fetch_one(&mut self.connection)
+                .fetch_one(&self.pool)
                 .await?;
 
                 Transaction::Debit {
@@ -440,13 +438,13 @@ impl FinancialDataBase {
         Ok(transaction)
     }
 
-    pub(crate) async fn party(&mut self, party_id: i64) -> Result<Party, sqlx::Error> {
+    pub(crate) async fn party(&self, party_id: i64) -> Result<Party, sqlx::Error> {
         let mut party: Party = Party::new(Vec::new());
 
         // add incomes to the party
         let query_result =
             sqlx::query!("select income_id from incomes where party_id = ?", party_id)
-                .fetch_all(&mut self.connection)
+                .fetch_all(&self.pool)
                 .await?;
 
         let income_ids: Vec<i64> = query_result.into_iter().map(|r| r.income_id).collect();
@@ -459,7 +457,7 @@ impl FinancialDataBase {
             "select expense_id from expenses where party_id = ?",
             party_id
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(&self.pool)
         .await?;
 
         let expense_ids: Vec<i64> = query_result.into_iter().map(|r| r.expense_id).collect();
@@ -475,7 +473,7 @@ impl FinancialDataBase {
             "select fund_movement_id, fund_movement_type from fund_movements where party_id = ?",
             party_id
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(&self.pool)
         .await?;
 
         for record in query_result {
@@ -492,15 +490,15 @@ impl FinancialDataBase {
         Ok(party)
     }
 
-    pub(crate) async fn delete_party(&mut self, party_id: i64) -> Result<(), sqlx::Error> {
+    pub(crate) async fn delete_party(&self, party_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query!("delete from expenses where party_id = ?", party_id)
-            .execute(&mut self.connection)
+            .execute(&self.pool)
             .await?;
         sqlx::query!("delete from incomes where party_id = ?", party_id)
-            .execute(&mut self.connection)
+            .execute(&self.pool)
             .await?;
         sqlx::query!("delete from fund_movements where party_id = ?", party_id)
-            .execute(&mut self.connection)
+            .execute(&self.pool)
             .await?;
 
         Ok(())
@@ -567,7 +565,7 @@ mod tests {
 
         let actual_account_record: AccountRecord =
             sqlx::query_as!(AccountRecord, "select * from accounts where account_id = 1")
-                .fetch_one(&mut financial_database.connection)
+                .fetch_one(&financial_database.pool)
                 .await
                 .unwrap();
 
@@ -603,7 +601,7 @@ mod tests {
 
         let actual_entity_record: EntityRecord =
             sqlx::query_as!(EntityRecord, "select * from entities where entity_id = 1")
-                .fetch_one(&mut financial_database.connection)
+                .fetch_one(&financial_database.pool)
                 .await
                 .unwrap();
 
@@ -650,7 +648,7 @@ mod tests {
             ExpenseRecord,
             "select * from expenses where expense_id = 262"
         )
-        .fetch_one(&mut financial_database.connection)
+        .fetch_one(&financial_database.pool)
         .await
         .unwrap();
 
@@ -695,7 +693,7 @@ mod tests {
 
         let actual_income_record: IncomeRecord =
             sqlx::query_as!(IncomeRecord, "select * from incomes where income_id = 12")
-                .fetch_one(&mut financial_database.connection)
+                .fetch_one(&financial_database.pool)
                 .await
                 .unwrap();
 
@@ -737,7 +735,7 @@ mod tests {
             FundMovementRecord,
             "select * from fund_movements where fund_movement_id = 274"
         )
-        .fetch_one(&mut financial_database.connection)
+        .fetch_one(&financial_database.pool)
         .await
         .unwrap();
 
@@ -779,7 +777,7 @@ mod tests {
             FundMovementRecord,
             "select * from fund_movements where fund_movement_id = 274"
         )
-        .fetch_one(&mut financial_database.connection)
+        .fetch_one(&financial_database.pool)
         .await
         .unwrap();
 
@@ -809,7 +807,7 @@ mod tests {
 
         let actual_party_record: PartyRecord =
             sqlx::query_as!(PartyRecord, "select * from parties where party_id = 274")
-                .fetch_one(&mut financial_database.connection)
+                .fetch_one(&financial_database.pool)
                 .await
                 .unwrap();
 

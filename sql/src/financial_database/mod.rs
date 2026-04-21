@@ -7,8 +7,8 @@ pub mod views;
 use crate::financial::Currency;
 use crate::table_records::*;
 use crate::FINANCIAL_DATABASE_URL;
-use jiff::{Zoned, civil::Date, civil::Weekday};
-use sqlx::{migrate::MigrateDatabase, sqlite::SqliteConnection, Connection, Sqlite};
+use jiff::{civil::Date, civil::Weekday, Zoned};
+use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
 use std::io::Cursor;
 use std::path::Path;
 use strum::IntoEnumIterator;
@@ -17,8 +17,9 @@ use tokio::runtime::Runtime;
 const BASE_CURRENCY: Currency = Currency::EUR;
 const DATE_FORMAT: &str = "%Y-%m-%d";
 
+#[derive(Clone)]
 pub struct FinancialDataBase {
-    connection: SqliteConnection,
+    pool: SqlitePool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -30,11 +31,11 @@ struct ECBRecord {
 }
 
 impl FinancialDataBase {
-    async fn first_boot(financial_database_url: &str) -> Result<SqliteConnection, sqlx::Error> {
+    async fn first_boot(financial_database_url: &str) -> Result<SqlitePool, sqlx::Error> {
         Sqlite::create_database(financial_database_url).await.expect("Attempted to create new SQLite database, but there already exists one! This should never happen.");
         println!("New database created!");
-        let mut connection = SqliteConnection::connect(financial_database_url).await?;
-        let mut transaction = connection.begin().await?;
+        let pool = SqlitePool::connect(financial_database_url).await?;
+        let mut transaction = pool.begin().await?;
 
         // initalization of all six tables
         sqlx::query_file!("src/queries/table_creation/create_account_table.sql")
@@ -180,17 +181,17 @@ impl FinancialDataBase {
         }
         transaction.commit().await?;
 
-        Ok(connection)
+        Ok(pool)
     }
 
-    async fn init_currency_exchange(connection: &mut SqliteConnection) -> Result<(), sqlx::Error> {
+    async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         sqlx::query_file!("src/queries/table_creation/create_currency_exchange_table.sql")
-            .execute(&mut *connection)
+            .execute(pool)
             .await?;
 
         let last_date: String =
             match sqlx::query!("select max(date) as max_date from currency_exchanges")
-                .fetch_one(&mut *connection)
+                .fetch_one(pool)
                 .await
             {
                 Ok(row) => match row.max_date {
@@ -200,12 +201,12 @@ impl FinancialDataBase {
                 Err(_e) => String::from("1999-01-04"), // start of the time series
             };
         let today: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
-
+        println!("ld: {}, today: {}", last_date, today);
         if last_date >= today {
             return Ok(());
         }
 
-        let mut transaction = connection.begin().await?;
+        let mut transaction = pool.begin().await?;
 
         for other_currency in Currency::iter() {
             if other_currency == BASE_CURRENCY {
@@ -213,11 +214,12 @@ impl FinancialDataBase {
             }
             let mut currency_from: String = BASE_CURRENCY.to_string();
             let mut currency_to: String = other_currency.to_string();
+            let start_date: String = Date::strptime("%Y-%m-%d", &last_date).unwrap().tomorrow().unwrap().strftime("%Y-%m-%d").to_string();
             let url = format!(
                 "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
                 currency_to,
                 currency_from,
-                last_date
+                start_date
             );
 
             let response = reqwest::get(url).await.unwrap();
@@ -230,7 +232,7 @@ impl FinancialDataBase {
             for record in reader.deserialize() {
                 let ecb_record: ECBRecord = record.unwrap();
                 let record_date: Date =
-                    Date::strptime(ecb_record.date.as_str(), "%Y-%m-%d").unwrap();
+                    Date::strptime("%Y-%m-%d", ecb_record.date.as_str()).unwrap();
                 let mut dates: Vec<Date> = vec![record_date];
                 if record_date.weekday() == Weekday::Friday {
                     dates.push(record_date.tomorrow().unwrap());
@@ -271,21 +273,20 @@ impl FinancialDataBase {
     pub(crate) async fn init(
         financial_database_url: &str,
     ) -> Result<FinancialDataBase, sqlx::Error> {
-        let mut connection: SqliteConnection =
-            match Sqlite::database_exists(financial_database_url).await? {
-                true => {
-                    println!("Connecting to existing database!");
-                    SqliteConnection::connect(financial_database_url).await?
-                }
-                false => {
-                    println!("Creating new database!");
-                    FinancialDataBase::first_boot(financial_database_url).await?
-                }
-            };
+        let pool: SqlitePool = match Sqlite::database_exists(financial_database_url).await? {
+            true => {
+                println!("Connecting to existing database!");
+                SqlitePool::connect(financial_database_url).await?
+            }
+            false => {
+                println!("Creating new database!");
+                FinancialDataBase::first_boot(financial_database_url).await?
+            }
+        };
 
-        FinancialDataBase::init_currency_exchange(&mut connection).await?;
+        FinancialDataBase::init_currency_exchange(&pool).await?;
 
-        Ok(FinancialDataBase { connection })
+        Ok(FinancialDataBase { pool })
     }
 }
 

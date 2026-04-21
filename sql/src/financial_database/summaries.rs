@@ -1,7 +1,7 @@
 use crate::financial::Currency;
 use crate::financial_database::{FinancialDataBase, DATE_FORMAT};
 use jiff::civil::Date;
-use sqlx::{sqlite::SqliteRow, Connection};
+use sqlx::sqlite::SqliteRow;
 use std::fmt::Display;
 use strum_macros::{EnumIter, EnumString};
 
@@ -72,7 +72,7 @@ impl FinancialDataBase {
     /// Calculates the sum of all the incomes earned between date_from to date_to, both included,
     /// in the currency currency_to.
     async fn total_income(
-        &mut self,
+        &self,
         date_from: Date,
         date_to: Date,
         currency_to: &Currency,
@@ -87,7 +87,7 @@ impl FinancialDataBase {
             date_to_string,
             currency_to_string,
         )
-        .fetch_one(&mut self.connection)
+        .fetch_one(&self.pool)
         .await?;
 
         Ok(record.total_income.unwrap_or(0.0f64))
@@ -95,7 +95,7 @@ impl FinancialDataBase {
 
     /// check: might the fund_changes.value column be null?
     pub(crate) async fn current_fund_stand(
-        &mut self,
+        &self,
         currency_to: Option<&Currency>,
     ) -> Result<Vec<CurrentFundStandRow>, sqlx::Error> {
         if let Some(currency_to) = currency_to {
@@ -106,21 +106,21 @@ impl FinancialDataBase {
                 currency_to_string,
                 currency_to_string
             )
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await
         } else {
             sqlx::query_file_as!(
                 CurrentFundStandRow,
                 "src/queries/summaries/summary_current_fund_stand_nocurrency.sql"
             )
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await
         }
     }
 
     /// Generates a summary table of all expenses between date_from to date_to, expressed in the currency_to
     pub(crate) async fn expenses_summary(
-        &mut self,
+        &self,
         date_from: Date,
         date_to: Date,
         currency_to: &Currency,
@@ -131,7 +131,7 @@ impl FinancialDataBase {
         let date_to_string: String = date_to.to_string();
         let currency_to_string: String = currency_to.to_string();
 
-        let mut transaction = self.connection.begin().await?;
+        let mut transaction = self.pool.begin().await?;
 
         sqlx::query_file!(
             "src/queries/summaries/temporary_expenses_grouped.sql",
@@ -175,14 +175,14 @@ impl FinancialDataBase {
     /// because we do not know what columns will be retrieved (since we do
     /// not know what unique categories are stored in the database).
     pub(crate) async fn evolution_table(
-        &mut self,
+        &self,
         currency_to: &Currency,
         time_unit: &TimeUnit,
     ) -> Result<(Vec<String>, Vec<SqliteRow>), sqlx::Error> {
         let currency_to_string: String = currency_to.to_string();
         let time_unit_format: String = time_unit.date_format().to_string();
         let unique_categories: Vec<String> = sqlx::query!("select distinct category from expenses")
-            .fetch_all(&mut self.connection)
+            .fetch_all(&self.pool)
             .await?
             .into_iter()
             .map(|record| record.category)
@@ -195,7 +195,7 @@ impl FinancialDataBase {
             time_unit_format,
             time_unit_format
         )
-        .execute(&mut self.connection)
+        .execute(&self.pool)
         .await?;
 
         let mut query_string: String = String::from("select date, ");
@@ -212,9 +212,7 @@ impl FinancialDataBase {
             + " from expense_evolution_temporary";
         let query_str: &str = &query_string;
 
-        let rows: Vec<SqliteRow> = sqlx::query(query_str)
-            .fetch_all(&mut self.connection)
-            .await?;
+        let rows: Vec<SqliteRow> = sqlx::query(query_str).fetch_all(&self.pool).await?;
 
         Ok((unique_categories, rows))
     }
