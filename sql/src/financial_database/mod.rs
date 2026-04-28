@@ -22,7 +22,7 @@ pub struct FinancialDataBase {
     pool: SqlitePool,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 struct ECBRecord {
     #[serde(rename = "TIME_PERIOD")]
     date: String,
@@ -201,7 +201,6 @@ impl FinancialDataBase {
                 Err(_e) => String::from("1999-01-04"), // start of the time series
             };
         let today: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
-        println!("ld: {}, today: {}", last_date, today);
         if last_date >= today {
             return Ok(());
         }
@@ -214,7 +213,12 @@ impl FinancialDataBase {
             }
             let mut currency_from: String = BASE_CURRENCY.to_string();
             let mut currency_to: String = other_currency.to_string();
-            let start_date: String = Date::strptime("%Y-%m-%d", &last_date).unwrap().tomorrow().unwrap().strftime("%Y-%m-%d").to_string();
+            let start_date: String = Date::strptime("%Y-%m-%d", &last_date)
+                .unwrap()
+                .tomorrow()
+                .unwrap()
+                .strftime("%Y-%m-%d")
+                .to_string();
             let url = format!(
                 "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
                 currency_to,
@@ -225,25 +229,45 @@ impl FinancialDataBase {
             let response = reqwest::get(url).await.unwrap();
             let csv_data = response.bytes().await.unwrap();
             let cursor = Cursor::new(csv_data);
-
             let mut reader = csv::Reader::from_reader(cursor);
-
+            let mut records = reader.deserialize::<ECBRecord>();
             let mut value: f64 = 1.0;
-            for record in reader.deserialize() {
-                let ecb_record: ECBRecord = record.unwrap();
-                let record_date: Date =
-                    Date::strptime("%Y-%m-%d", ecb_record.date.as_str()).unwrap();
-                let mut dates: Vec<Date> = vec![record_date];
-                if record_date.weekday() == Weekday::Friday {
-                    dates.push(record_date.tomorrow().unwrap());
-                    dates.push(record_date.tomorrow().unwrap().tomorrow().unwrap());
-                }
-                value = ecb_record.value.unwrap_or(value);
 
-                for date in dates {
+            let current_record_wrapped = records.next();
+            if current_record_wrapped.is_none() {
+                continue; // it's an empty csv
+            }
+            let mut current_record: ECBRecord = current_record_wrapped.unwrap().unwrap();
+            let mut flag: bool = true;
+            while flag {
+                let next_record: ECBRecord = match records.next() {
+                    Some(next_record_wrapped) => next_record_wrapped.unwrap(),
+                    None => {
+                        flag = false; // no next record, this will be the last iter
+                        ECBRecord {
+                            date: Zoned::now()
+                                .date()
+                                .tomorrow()
+                                .expect("We got to the end of the calendar?!")
+                                .strftime(DATE_FORMAT)
+                                .to_string(),
+                            value: None, // value is irrelevant
+                        }
+                    }
+                };
+
+                let mut current_record_date: Date =
+                    Date::strptime("%Y-%m-%d", current_record.date.as_str()).unwrap();
+                let next_record_date: Date =
+                    Date::strptime("%Y-%m-%d", next_record.date.as_str()).unwrap();
+                value = current_record.value.unwrap_or(value);
+
+                while current_record_date != next_record_date {
+                    // add records to the database until the next date is reached
                     for _ in 0..2 {
                         // add from->to value, and then add to->from 1/value
-                        let date_string: String = date.strftime(DATE_FORMAT).to_string();
+                        let date_string: String =
+                            current_record_date.strftime(DATE_FORMAT).to_string();
                         let id: String =
                             format!("{}_{}_{}", date_string, currency_from, currency_to,);
                         sqlx::query_file!(
@@ -262,7 +286,13 @@ impl FinancialDataBase {
                         currency_to = temp;
                         value = 1.0 / value;
                     }
+
+                    current_record_date = current_record_date
+                        .tomorrow()
+                        .expect("Got to the end of the calendar?!");
                 }
+
+                current_record = next_record;
             }
         }
         transaction.commit().await?;
