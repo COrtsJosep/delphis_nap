@@ -19,14 +19,15 @@ from
 		and currency_exchanges_from_eur.currency_from = currency_exchanges_to_eur.currency_to	
 	left join accounts
 	on 
-		accounts.creation_date = currency_exchanges_from_eur.date
-		and accounts.currency = currency_exchanges_from_eur.currency_to
+		accounts.creation_date = currency_exchanges_to_eur.date
+		and accounts.currency = currency_exchanges_to_eur.currency_from
 	left join fund_movements 
 	on
-		fund_movements.date = currency_exchanges_from_eur.date
-		and fund_movements.currency = currency_exchanges_from_eur.currency_to
+		fund_movements.date = currency_exchanges_to_eur.date
+		and fund_movements.currency = currency_exchanges_to_eur.currency_from
 where
 	currency_exchanges_to_eur.date >= min((select min(creation_date) from accounts), (select min(date) from fund_movements))
-	and currency_exchanges_to_eur.date <= max((select max(creation_date) from accounts), (select max(date) from fund_movements)) 
+	and currency_exchanges_to_eur.date <= max((select max(creation_date) from accounts), (select max(date) from fund_movements))
+	and currency_exchanges_to_eur.currency_to = 'EUR'
 group by currency_exchanges_to_eur.date
 order by currency_exchanges_to_eur.date asc
