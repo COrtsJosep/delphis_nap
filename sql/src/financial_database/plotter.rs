@@ -255,6 +255,13 @@ impl FinancialDataBase {
             .await?
             .max;
 
+        // all data being collected, we can now drop the temp table
+        sqlx::query!("drop table if exists monthly_expenses_temporary")
+            .execute(&mut *transaction)
+            .await?;
+
+        transaction.commit().await?;
+
         // now we have:
         // - a vec of unique months, sorted asc
         // - a vec of unique categories, sorted desc on largest expenses per month
@@ -268,6 +275,7 @@ impl FinancialDataBase {
         root.fill(&WHITE).unwrap();
 
         // Initialize axis, etc.
+        let segmented_coord = unique_months.into_segmented();
         let mut chart = ChartBuilder::on(&root)
             .caption(
                 "Expenses by Month and Category",
@@ -275,7 +283,7 @@ impl FinancialDataBase {
             )
             .set_label_area_size(LabelAreaPosition::Left, 60)
             .set_label_area_size(LabelAreaPosition::Bottom, 60)
-            .build_cartesian_2d(unique_months.into_segmented(), lower_bound..upper_bound)
+            .build_cartesian_2d(segmented_coord.clone(), lower_bound..upper_bound)
             .unwrap();
 
         // Initialize the plotted objects.
@@ -306,10 +314,11 @@ impl FinancialDataBase {
         for (index_m, month) in unique_months.iter().enumerate() {
             let mut y0_pos: f64 = 0.0;
             let mut y0_neg: f64 = 0.0;
+            let x0 = SegmentValue::Exact(month);
+            let x1 = segmented_coord.next(&x0).unwrap();                
             for (mut index_c, category) in unique_categories.iter().enumerate() {
                 index_c = index_c % 14; // wrap around the maximum number of colours
                 let colour = palette[index_c];
-                let x0 = SegmentValue::CenterOf(month);
                 let height = match months_hm
                     .get(month)
                     .expect("The month cannot not be there, by construction.")
@@ -322,7 +331,7 @@ impl FinancialDataBase {
                 let y0 = if height > 0.0 { y0_pos } else { y0_neg };
                 let y1 = y0 + height;
 
-                let mut bar = Rectangle::new([(x0.clone(), y0), (x0, y1)], colour.filled());
+                let mut bar = Rectangle::new([(x0.clone(), y0), (x1.clone(), y1)], colour.filled());
                 bar.set_margin(0, 0, 5, 5);
 
                 let ctx = chart.draw_series(vec![bar]).unwrap();
@@ -341,19 +350,18 @@ impl FinancialDataBase {
             }
         }
 
-        // Finally, create the legend and export.
+        // Create the legend and export.
         chart
             .configure_series_labels()
-            .position(SeriesLabelPosition::UpperRight)
+            .position(SeriesLabelPosition::UpperLeft)
             .border_style(&BLACK)
             .background_style(&WHITE.mix(0.8))
             .draw()
             .unwrap();
-
-        sqlx::query!("drop table if exists monthly_expenses_temporary")
-            .execute(&mut *transaction)
-            .await?;
-
-        transaction.commit().await
+            
+        // Finally save the plot
+        root.present().unwrap();
+        
+        Ok(())
     }
 }
