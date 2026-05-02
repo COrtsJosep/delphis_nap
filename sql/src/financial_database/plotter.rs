@@ -202,24 +202,20 @@ impl FinancialDataBase {
         let currency_to_string: String = currency_to.to_string();
 
         let mut transaction = self.pool.begin().await?;
-        match barplot_type {
-            BarplotType::ABSOLUTE => {
-                sqlx::query_file!(
-                    "src/queries/plots/temporary_monthly_expenses_absolute.sql",
-                    currency_to_string
-                )
-                .execute(&mut *transaction)
-                .await?;
-            }
-            BarplotType::RELATIVE => {
-                sqlx::query_file!(
-                    "src/queries/plots/temporary_monthly_expenses_relative.sql",
-                    currency_to_string
-                )
-                .execute(&mut *transaction)
-                .await?;
-            }
-        };
+        sqlx::query_file!(
+                "src/queries/plots/temporary_monthly_expenses.sql",
+                currency_to_string
+            )
+            .execute(&mut *transaction)
+            .await?;
+            
+        if let BarplotType::RELATIVE = barplot_type {
+            sqlx::query_file!(
+                "src/queries/plots/temporary_monthly_expenses_relativize.sql"
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
 
         let records: Vec<MonthlyExpensesRecord> = sqlx::query_as!(
             MonthlyExpensesRecord,
@@ -289,6 +285,7 @@ impl FinancialDataBase {
         // Initialize the plotted objects.
         let mut mesh = chart.configure_mesh();
         mesh.disable_x_mesh().light_line_style(WHITE);
+        mesh.x_label_formatter(&|x| match x {SegmentValue::Exact(T) => T.to_string(), SegmentValue::CenterOf(T) => T.to_string(), _ => String::default()});
 
         // Set the correct y-axis labels depending on the plot type.
         match barplot_type {

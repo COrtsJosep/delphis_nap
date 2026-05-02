@@ -3,18 +3,9 @@ use crate::financial_database::plotter::BarplotType;
 use crate::gui::{AppState, WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui;
 use eframe::egui::ComboBox;
-use egui_async::egui::AsyncButton;
+use egui_async::StateWithData;
 use egui_extras::*;
 use strum::IntoEnumIterator;
-//
-use crate::financial_database::FinancialDataBase;
-
-async fn plot_fund_evolution(
-    financial_database: FinancialDataBase,
-    currency_to: Currency,
-) -> Result<(), sqlx::Error> {
-    financial_database.funds_evolution(&currency_to).await
-}
 
 impl AppState {
     pub fn handle_show_fund_evolution_plot(&mut self, ui: &mut egui::Ui) -> () {
@@ -61,15 +52,29 @@ impl AppState {
                                         ui.end_row();
 
                                         ui.label("");
-
-                                        let db = self.financial_database.clone();
-                                        let curr = self.fund_evolution_plot_currency.clone();
-                                        AsyncButton::new(
-                                            &mut self.fund_evolution_plot_bind,
-                                            "Generate!",
-                                        )
-                                        .pending_text("Generating...")
-                                        .show(ui, || plot_fund_evolution(db, curr));
+                                        if ui.button("Generate!").clicked() {
+                                            let currency =
+                                                self.fund_evolution_plot_currency.clone();
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.funds_evolution(&currency).await };
+                                            self.fund_evolution_plot_bind.request(fut);
+                                            self.fund_evolution_plot_clear_requested = true;
+                                        }
+                                        match self.fund_evolution_plot_bind.state() {
+                                            StateWithData::Failed(e) => {
+                                                self.error_message = e.to_string();
+                                                self.show_error_window = true;
+                                            }
+                                            StateWithData::Finished(_) => {
+                                                if self.fund_evolution_plot_clear_requested {
+                                                    ui.ctx().forget_all_images();
+                                                    self.fund_evolution_plot_clear_requested =
+                                                        false;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
                                     });
                                 ui.separator();
                             });
@@ -152,17 +157,28 @@ impl AppState {
 
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
-                                            async {
-                                            match self.financial_database.monthly_expenses(
-                                                &self.expense_category_plot_currency,
-                                                &self.expense_category_plot_type,
-                                            ).await {
-                                                Ok(_) => {},
-                                                Err(e) => {self.throw_sqlx_error(e);}
+                                            let currency =
+                                                self.expense_category_plot_currency.clone();
+                                            let plot_type = self.expense_category_plot_type.clone();
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.monthly_expenses(&currency, &plot_type).await };
+                                            self.expense_category_plot_bind.request(fut);
+                                            self.expense_category_plot_clear_requested = true;
+                                        }
+                                        match self.expense_category_plot_bind.state() {
+                                            StateWithData::Failed(e) => {
+                                                self.error_message = e.to_string();
+                                                self.show_error_window = true;
                                             }
-                                            };
-
-                                            ui.ctx().forget_all_images();
+                                            StateWithData::Finished(_) => {
+                                                if self.expense_category_plot_clear_requested {
+                                                    ui.ctx().forget_all_images();
+                                                    self.expense_category_plot_clear_requested =
+                                                        false;
+                                                }
+                                            }
+                                            _ => {}
                                         }
                                     });
                                 ui.separator();

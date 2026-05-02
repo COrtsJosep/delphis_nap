@@ -1,6 +1,6 @@
 use crate::gui::{AppState, WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui;
-use egui::{Ui};
+use egui::Ui;
 
 impl AppState {
     pub fn handle_show_error_window(&mut self, ui: &mut Ui) -> () {
@@ -25,6 +25,11 @@ impl AppState {
     }
 
     pub fn throw_sqlx_error(&mut self, error: sqlx::Error) -> () {
+        self.error_message = error.to_string();
+        self.show_error_window = true;
+    }
+
+    pub fn throw_ref_sqlx_error(&mut self, error: &sqlx::Error) -> () {
         self.error_message = error.to_string();
         self.show_error_window = true;
     }

@@ -10,13 +10,13 @@ use crate::financial_database::{
     summaries::TimeUnit, views::FundMovementView, views::TransactionView, FinancialDataBase,
 };
 use derivative::*;
-use eframe::{Frame, App, egui};
+use eframe::{egui, App, Frame};
+use egui::Ui;
 use egui_async;
+use egui_async::Bind;
 use egui_extras::{Size, StripBuilder};
 use jiff::{civil::Date, Zoned};
 use sqlx::sqlite::SqliteRow;
-use egui::{Ui};
-use egui_async::Bind;
 
 const WINDOW_HEIGHT: f32 = 400.0;
 const WINDOW_WIDTH: f32 = 600.0;
@@ -104,18 +104,23 @@ pub struct AppState {
     browse_account_string: String,
 
     fund_evolution_plot_currency: Currency,
+    #[derivative(Default(value = "Bind::new(true)"))]
     fund_evolution_plot_bind: Bind<(), sqlx::Error>,
+    fund_evolution_plot_clear_requested: bool,
 
     expense_category_plot_currency: Currency,
     expense_category_plot_type: BarplotType,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    expense_category_plot_bind: Bind<(), sqlx::Error>,
+    expense_category_plot_clear_requested: bool,
 }
 
 impl App for AppState {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.plugin_or_default::<egui_async::EguiAsyncPlugin>();
     }
-    
-    fn ui(&mut self, ui: &mut Ui, frame: &mut Frame) -> () {
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) -> () {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             StripBuilder::new(ui)
                 .size(Size::exact(20.0))

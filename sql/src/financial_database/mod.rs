@@ -7,7 +7,7 @@ pub mod views;
 use crate::financial::Currency;
 use crate::table_records::*;
 use crate::FINANCIAL_DATABASE_URL;
-use jiff::{civil::Date, civil::Weekday, Zoned};
+use jiff::{civil::Date, Zoned};
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
 use std::io::Cursor;
 use std::path::Path;
