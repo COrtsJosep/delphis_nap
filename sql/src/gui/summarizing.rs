@@ -6,6 +6,7 @@ use egui::{Align, ComboBox, Layout};
 use egui_extras::*;
 use sqlx::Row;
 use strum::IntoEnumIterator;
+use egui_async::StateWithData;
 
 impl AppState {
     pub fn handle_show_expense_summary_window(&mut self, ctx: &egui::Context) -> () {
@@ -40,78 +41,81 @@ impl AppState {
 
                                         ui.label("Currency:").on_hover_text("Currency in which to express the ammounts.");
                                         ComboBox::from_id_salt("Expense summary currency")
-                                .selected_text(format!("{}", self.expense_summary_currency))
-                                .show_ui(ui, |ui| {
-                                    for possible_expense_summary_currency in Currency::iter() {
-                                        ui.selectable_value(
-                                            &mut self.expense_summary_currency,
-                                            possible_expense_summary_currency.clone(),
-                                            format!("{possible_expense_summary_currency}"),
-                                        );
-                                    }
-                                });
+                                            .selected_text(format!("{}", self.expense_summary_currency))
+                                            .show_ui(ui, |ui| {
+                                                for possible_expense_summary_currency in Currency::iter() {
+                                                    ui.selectable_value(
+                                                        &mut self.expense_summary_currency,
+                                                        possible_expense_summary_currency.clone(),
+                                                        format!("{possible_expense_summary_currency}"),
+                                                    );
+                                                }
+                                            });
                                         ui.end_row();
 
                                         ui.label("");
-                                        async {
                                         if ui.button("Generate!").clicked() {
-                                            match self.financial_database.expenses_summary(
-                                                self.expense_summary_date_from,
-                                                self.expense_summary_date_to,
-                                                &self.expense_summary_currency
-                                            ).await {
-                                                Ok(v) => {self.expense_summary_rows = v;},
-                                                Err(e) => {self.throw_sqlx_error(e);}}
-                                        }};
+                                            let date_from = self.expense_summary_date_from.clone();
+                                            let date_to = self.expense_summary_date_to.clone();
+                                            let currency =
+                                                self.expense_summary_currency.clone();
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.expenses_summary(date_from, date_to, &currency).await };
+                                            self.expense_summary_bind.request(fut);
+                                        }
                                     });
                                 ui.separator();
                             });
-                            if !self.expense_summary_rows.is_empty() {
-                            strip.cell(|ui| {
-                                TableBuilder::new(ui)
-                                        .columns(Column::auto().resizable(true), 6)
-                                        .striped(true)
-                                        .cell_layout(Layout::right_to_left(Align::Center))
-                                        .header(20.0, |mut header| {
-                                            for column_name in vec!["Category", "Subcategory", "Value", "Value per Day", "% of Total Expenses", "% of Total Income"] {
-                                                header.col(|ui| {
-                                                    ui.strong(column_name)
-                                                        .on_hover_text(column_name);
-                                                });
-                                            }
-                                        })
-                                        .body(|mut body| {
-                                            for expense_summary_row in &self.expense_summary_rows {
-                                                body.row(30.0, |mut row_ui| {
-                                                    if expense_summary_row.category == "Total".to_string() {
-                                                        row_ui.col(|ui| {ui.strong(expense_summary_row.category.clone());});
-                                                        row_ui.col(|ui| {ui.strong(expense_summary_row.subcategory.clone());});
-                                                        row_ui.col(|ui| {ui.strong(format!("{:.2}", expense_summary_row.value));});
-                                                        row_ui.col(|ui| {ui.strong(format!("{:.2}", expense_summary_row.value_day));});
-                                                        row_ui.col(|ui| {ui.strong(format!("{:.2}%", 100.0 * expense_summary_row.value_total_expenses));});
-                                                        row_ui.col(|ui| {ui.strong(format!("{:.2}%", 100.0 * expense_summary_row.value_total_incomes));});
-                                                    } else {
-                                                        row_ui.col(|ui| {ui.label(expense_summary_row.category.clone());});
-                                                        row_ui.col(|ui| {ui.label(expense_summary_row.subcategory.clone());});
-                                                        row_ui.col(|ui| {ui.label(format!("{:.2}", expense_summary_row.value));});
-                                                        row_ui.col(|ui| {ui.label(format!("{:.2}", expense_summary_row.value_day));});
-                                                        row_ui.col(|ui| {ui.label(format!("{:.2}%", 100.0 * expense_summary_row.value_total_expenses));});
-                                                        row_ui.col(|ui| {ui.label(format!("{:.2}%", 100.0 * expense_summary_row.value_total_incomes));});
-                                                    }
 
+                            match self.expense_summary_bind.state() {
+                                StateWithData::Finished(expense_summary_rows) => {
+                                    strip.cell(|ui| {
+                                        TableBuilder::new(ui)
+                                                .columns(Column::auto().resizable(true), 6)
+                                                .striped(true)
+                                                .cell_layout(Layout::right_to_left(Align::Center))
+                                                .header(20.0, |mut header| {
+                                                    for column_name in vec!["Category", "Subcategory", "Value", "Value per Day", "% of Total Expenses", "% of Total Income"] {
+                                                        header.col(|ui| {
+                                                            ui.strong(column_name)
+                                                                .on_hover_text(column_name);
+                                                        });
+                                                    }
+                                                })
+                                                .body(|mut body| {
+                                                    for expense_summary_row in expense_summary_rows {
+                                                        body.row(30.0, |mut row_ui| {
+                                                            if expense_summary_row.category == "Total".to_string() {
+                                                                row_ui.col(|ui| {ui.strong(expense_summary_row.category.clone());});
+                                                                row_ui.col(|ui| {ui.strong(expense_summary_row.subcategory.clone());});
+                                                                row_ui.col(|ui| {ui.strong(format!("{:.2}", expense_summary_row.value));});
+                                                                row_ui.col(|ui| {ui.strong(format!("{:.2}", expense_summary_row.value_day));});
+                                                                row_ui.col(|ui| {ui.strong(format!("{:.2}%", 100.0 * expense_summary_row.value_total_expenses));});
+                                                                row_ui.col(|ui| {ui.strong(format!("{:.2}%", 100.0 * expense_summary_row.value_total_incomes));});
+                                                            } else {
+                                                                row_ui.col(|ui| {ui.label(expense_summary_row.category.clone());});
+                                                                row_ui.col(|ui| {ui.label(expense_summary_row.subcategory.clone());});
+                                                                row_ui.col(|ui| {ui.label(format!("{:.2}", expense_summary_row.value));});
+                                                                row_ui.col(|ui| {ui.label(format!("{:.2}", expense_summary_row.value_day));});
+                                                                row_ui.col(|ui| {ui.label(format!("{:.2}%", 100.0 * expense_summary_row.value_total_expenses));});
+                                                                row_ui.col(|ui| {ui.label(format!("{:.2}%", 100.0 * expense_summary_row.value_total_incomes));});
+                                                            }
+                                                        });
+                                                    }
                                                 });
-                                            }
-                                            });
-                                ui.separator();
-                            });
-                            }
+                                        ui.separator();
+                                    });
+                                },
+                                StateWithData::Failed(e) => {self.error_message = e.to_string(); self.show_error_window = true;},
+                                _ => {},
+                            };
                         });
+                    });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
                     self.show_expense_summary_window = false;
                 }
-            },
-        )
     }
     pub fn handle_show_fund_stand_window(&mut self, ctx: &egui::Context) -> () {
         ctx.show_viewport_immediate(

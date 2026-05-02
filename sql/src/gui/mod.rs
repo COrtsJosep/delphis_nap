@@ -77,7 +77,8 @@ pub struct AppState {
     #[derivative(Default(value = "Zoned::now().date()"))]
     expense_summary_date_to: Date,
     expense_summary_currency: Currency,
-    expense_summary_rows: Vec<ExpenseSummaryRow>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    expense_summary_bind: Bind<Vec<ExpenseSummaryRow>, sqlx::Error>,
 
     fund_stand_csv: String,
     fund_stand_csv_correct: bool,
