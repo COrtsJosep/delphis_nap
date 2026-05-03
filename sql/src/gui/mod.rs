@@ -70,8 +70,6 @@ pub struct AppState {
     transaction_type: TransactionType,
     transaction_filter: String,
 
-    expense_summary_csv: String,
-    expense_summary_csv_correct: bool,
     #[derivative(Default(value = "Zoned::now().date()"))]
     expense_summary_date_from: Date,
     #[derivative(Default(value = "Zoned::now().date()"))]
@@ -80,17 +78,14 @@ pub struct AppState {
     #[derivative(Default(value = "Bind::new(true)"))]
     expense_summary_bind: Bind<Vec<ExpenseSummaryRow>, sqlx::Error>,
 
-    fund_stand_csv: String,
-    fund_stand_csv_correct: bool,
     current_fund_stand_currency: Option<Currency>,
-    current_fund_stand_rows: Vec<CurrentFundStandRow>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    current_fund_stand_bind: Bind<Vec<CurrentFundStandRow>, sqlx::Error>,
 
-    expenses_evolution_csv: String,
-    expenses_evolution_csv_correct: bool,
     expenses_evolution_currency: Currency,
     expenses_evolution_time_unit: TimeUnit,
-    expenses_evolution_unique_categories: Vec<String>,
-    expenses_evolution_rows: Vec<SqliteRow>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    expenses_evolution_table_bind: Bind<(Vec<String>, Vec<SqliteRow>), sqlx::Error>,
 
     last_transactions_n: i64,
     last_transactions_n_temptative: String,

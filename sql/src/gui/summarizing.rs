@@ -162,59 +162,58 @@ impl AppState {
                                         ui.end_row();
 
                                         ui.label("");
-                                        async {
                                         if ui.button("Generate!").clicked() {
-                                            match self.financial_database.current_fund_stand(
-                                                self.current_fund_stand_currency.as_ref()
-                                            ).await {
-                                                Ok(v) => {self.current_fund_stand_rows = v;},
-                                                Err(e) => {self.throw_sqlx_error(e);}
-                                            }
+                                            let currency =
+                                                self.current_fund_stand_currency.clone();
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.current_fund_stand(currency.as_ref()).await };
+                                            self.current_fund_stand_bind.request(fut);
                                         }
-                                        };
-
                                     });
                                 ui.separator();
                             });
-                            if self.fund_stand_csv_correct{
-                            strip.cell(|ui| {
-                                TableBuilder::new(ui)
-                                        .columns(Column::auto().resizable(true), match self.current_fund_stand_currency.clone() {Some(_c) => 4, None => 5})
-                                        .striped(true)
-                                        .cell_layout(Layout::right_to_left(Align::Center))
-                                        .header(20.0, |mut header| {
-                                            let column_names: Vec<String> = match self.current_fund_stand_currency.clone() {
-                                                Some(c) => vec!["Name".into(), "Country".into(), "Account Type".into(), c.to_string()],
-                                                None => vec!["Name".into(), "Country".into(), "Currency".into(), "Account Type".into(), "Value".into()]
-                                            };
-                                            for column_name in column_names {
-                                                header.col(|ui| {
-                                                    ui.strong(column_name.clone())
-                                                        .on_hover_text(column_name);
-                                                });
-                                            }
-                                        })
-                                        .body(|mut body| {
-                                            for current_fund_stand_row in &self.current_fund_stand_rows {
-                                                body.row(30.0, |mut row_ui| {
-                                                    row_ui.col(|ui| {
-                                                    ui.label(current_fund_stand_row.name.clone());});
-                                                    row_ui.col(|ui| {
-                                                    ui.label(current_fund_stand_row.country.clone());});
-                                                    match self.current_fund_stand_currency.clone() {
-                                                        Some(_c) => {},
-                                                        None => {row_ui.col(|ui| {
-ui.label(current_fund_stand_row.currency.clone());});}
+                            match self.current_fund_stand_bind.state() {
+                                StateWithData::Finished(current_fund_stand_rows) => {
+                                    strip.cell(|ui| {
+                                        TableBuilder::new(ui)
+                                                .columns(Column::auto().resizable(true), match self.current_fund_stand_currency.clone() {Some(_c) => 4, None => 5})
+                                                .striped(true)
+                                                .cell_layout(Layout::right_to_left(Align::Center))
+                                                .header(20.0, |mut header| {
+                                                    let column_names: Vec<String> = match self.current_fund_stand_currency.clone() {
+                                                        Some(c) => vec!["Name".into(), "Country".into(), "Account Type".into(), c.to_string()],
+                                                        None => vec!["Name".into(), "Country".into(), "Currency".into(), "Account Type".into(), "Value".into()]
+                                                    };
+                                                    for column_name in column_names {
+                                                        header.col(|ui| {
+                                                            ui.strong(column_name.clone())
+                                                                .on_hover_text(column_name);
+                                                        });
                                                     }
-                                                    row_ui.col(|ui| {
-ui.label(current_fund_stand_row.account_type.clone());});
-                                                    row_ui.col(|ui| {
-ui.label(format!("{:.2}", current_fund_stand_row.current_value));});
+                                                })
+                                                .body(|mut body| {
+                                                    for current_fund_stand_row in current_fund_stand_rows {
+                                                        body.row(30.0, |mut row_ui| {
+                                                            row_ui.col(|ui| {
+                                                            ui.label(current_fund_stand_row.name.clone());});
+                                                            row_ui.col(|ui| {
+                                                            ui.label(current_fund_stand_row.country.clone());});
+                                                            match self.current_fund_stand_currency.clone() {
+                                                                Some(_c) => {},
+                                                                None => {row_ui.col(|ui| {ui.label(current_fund_stand_row.currency.clone());});}
+                                                            }
+                                                            row_ui.col(|ui| {ui.label(current_fund_stand_row.account_type.clone());});
+                                                            row_ui.col(|ui| {ui.label(format!("{:.2}", current_fund_stand_row.current_value));});
+                                                        });
+                                                    }
                                                 });
-                                            }
-                                        });
-                                ui.separator();
-                            });}
+                                        ui.separator();
+                                    });
+                                },
+                                StateWithData::Failed(e) => {self.error_message = e.to_string(); self.show_error_window = true;},
+                                _ => {},
+                            }
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
@@ -285,82 +284,80 @@ ui.label(format!("{:.2}", current_fund_stand_row.current_value));});
                                         ui.end_row();
 
                                         ui.label("");
-                                        async {
-                                            if ui.button("Generate!").clicked() {
-                                                match self
-                                                    .financial_database
-                                                    .evolution_table(
-                                                        &self.expenses_evolution_currency,
-                                                        &self.expenses_evolution_time_unit,
-                                                    )
-                                                    .await
-                                                {
-                                                    Ok(v) => {
-                                                        self.expenses_evolution_unique_categories =
-                                                            v.0;
-                                                        self.expenses_evolution_rows = v.1;
-                                                    }
-                                                    Err(e) => {
-                                                        self.throw_sqlx_error(e);
-                                                    }
-                                                }
-                                            }
-                                        };
+                                        if ui.button("Generate!").clicked() {
+                                            let currency =
+                                                self.expenses_evolution_currency.clone();
+                                            let time_unit =
+                                                self.expenses_evolution_time_unit.clone();
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.evolution_table(&currency, &time_unit).await };
+                                            self.expenses_evolution_table_bind.request(fut);
+                                        }
                                     });
                                 ui.separator();
                             });
-                            if self.expenses_evolution_csv_correct {
-                                strip.cell(|ui| {
-                                    TableBuilder::new(ui)
-                                        .columns(
-                                            Column::auto().resizable(true),
-                                            self.expenses_evolution_unique_categories.len() + 1,
-                                        )
-                                        .striped(true)
-                                        .cell_layout(Layout::right_to_left(Align::Center))
-                                        .header(20.0, |mut header| {
-                                            header.col(|ui| {
-                                                ui.strong(
-                                                    self.expenses_evolution_time_unit.to_string(),
-                                                )
-                                                .on_hover_text(
-                                                    self.expenses_evolution_time_unit.to_string(),
-                                                );
-                                            });
-                                            for column_name in
-                                                &self.expenses_evolution_unique_categories
-                                            {
+                            match self.expenses_evolution_table_bind.state() {
+                                StateWithData::Finished(result) => {
+                                    let expenses_evolution_unique_categories = &result.0;
+                                    let expenses_evolution_rows = &result.1;
+                                    strip.cell(|ui| {
+                                        TableBuilder::new(ui)
+                                            .columns(
+                                                Column::auto().resizable(true),
+                                                expenses_evolution_unique_categories.len() + 1,
+                                            )
+                                            .striped(true)
+                                            .cell_layout(Layout::right_to_left(Align::Center))
+                                            .header(20.0, |mut header| {
                                                 header.col(|ui| {
-                                                    ui.strong(column_name)
-                                                        .on_hover_text(column_name);
+                                                    ui.strong(
+                                                        self.expenses_evolution_time_unit.to_string(),
+                                                    )
+                                                    .on_hover_text(
+                                                        self.expenses_evolution_time_unit.to_string(),
+                                                    );
                                                 });
-                                            }
-                                        })
-                                        .body(|mut body| {
-                                            for expenses_evolution_row in
-                                                &self.expenses_evolution_rows
-                                            {
-                                                body.row(30.0, |mut row_ui| {
-                                                    row_ui.col(|ui| {
-                                                        ui.label(
-                                                            expenses_evolution_row
-                                                                .get::<String, usize>(0),
-                                                        );
+                                                for column_name in
+                                                    expenses_evolution_unique_categories
+                                                {
+                                                    header.col(|ui| {
+                                                        ui.strong(column_name)
+                                                            .on_hover_text(column_name);
                                                     });
-                                                    for i in 1..expenses_evolution_row.len() {
+                                                }
+                                            })
+                                            .body(|mut body| {
+                                                for expenses_evolution_row in
+                                                    expenses_evolution_rows
+                                                {
+                                                    body.row(30.0, |mut row_ui| {
                                                         row_ui.col(|ui| {
-                                                            ui.label(format!(
-                                                                "{:.2}",
+                                                            ui.label(
                                                                 expenses_evolution_row
-                                                                    .get::<f64, usize>(i)
-                                                            ));
+                                                                    .get::<String, usize>(0),
+                                                            );
                                                         });
-                                                    }
-                                                });
-                                            }
-                                        });
-                                });
-                            }
+                                                        for i in 1..expenses_evolution_row.len() {
+                                                            row_ui.col(|ui| {
+                                                                ui.label(format!(
+                                                                    "{:.2}",
+                                                                    expenses_evolution_row
+                                                                        .get::<f64, usize>(i)
+                                                                ));
+                                                            });
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                    });
+                                },
+                                StateWithData::Failed(e) => {
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true;
+                                },
+                                _ => {},
+                            };
                             strip.cell(|ui| {
                                 ui.separator();
                             });
