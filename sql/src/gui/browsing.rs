@@ -220,25 +220,39 @@ impl AppState {
                                                     -1,
                                                     String::from("All accounts")
                                                 );
-                                                async {
-                                                match self.financial_database.iter_account_ids().await {
-                                                    Ok(iterator) => {
-                                                for account_id in iterator {
-                                                    ui.selectable_value(
-                                                        &mut self.browse_account_id,
-                                                        account_id,
-                                                        format!(
-                                                            "{:}",
-                                                            self.financial_database
-                                                            .account(account_id)
-                                                            .await
-                                                            .unwrap() // safe because we iterate
-                                                                      // over the ids!
-                                                            .to_string()
-                                                        ),
-                                                    );
-
-                                                }}, Err(e) => {self.throw_sqlx_error(e);}}
+                                                let db = self.financial_database.clone();
+                                                let fut = async move { db.iter_account_ids().await };
+                                                self.account_ids_bind.request(fut);
+                                                match self.account_ids_bind.state() {
+                                                    StateWithData::Finished(iterator) => {
+                                                        for account_id in iterator.clone() {
+                                                            let db = self.financial_database.clone();
+                                                            let fut = async move { db.account(account_id).await };
+                                                            self.account_bind.request(fut);
+                                                            match self.account_bind.state() {
+                                                                StateWithData::Finished(account) => {
+                                                                    ui.selectable_value(
+                                                                        &mut self.browse_account_id,
+                                                                        account_id,
+                                                                        format!(
+                                                                            "{:}",
+                                                                            account.to_string()
+                                                                        ),
+                                                                    );
+                                                                },
+                                                                StateWithData::Failed(e) => {
+                                                                    self.error_message = e.to_string();
+                                                                    self.show_error_window = true;
+                                                                },
+                                                                _ => {},
+                                                            };
+                                                        }
+                                                    },
+                                                    StateWithData::Failed(e) => {
+                                                        self.error_message = e.to_string();
+                                                        self.show_error_window = true;
+                                                    },
+                                                    _ => {},
                                                 };
                                             });
                                         ui.label("");

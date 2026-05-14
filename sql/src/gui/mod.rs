@@ -17,6 +17,7 @@ use egui_async::Bind;
 use egui_extras::{Size, StripBuilder};
 use jiff::{civil::Date, Zoned};
 use sqlx::sqlite::SqliteRow;
+use std::vec::IntoIter;
 
 const WINDOW_HEIGHT: f32 = 400.0;
 const WINDOW_WIDTH: f32 = 600.0;
@@ -61,6 +62,8 @@ pub struct AppState {
     
     #[derivative(Default(value = "Bind::new(true)"))]
     account_bind: Bind<Account, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    account_ids_bind: Bind<IntoIter<i64>, sqlx::Error>,
 
     transaction_value: f64,
     transaction_value_tentative: String,
