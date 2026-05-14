@@ -31,14 +31,6 @@ pub(crate) enum TimeUnit {
 }
 
 impl TimeUnit {
-    pub(crate) fn duration(&self) -> &str {
-        match self {
-            TimeUnit::Day => "1d",
-            TimeUnit::Week => "1w",
-            TimeUnit::Month => "1mo",
-            TimeUnit::Year => "1y",
-        }
-    }
     fn date_format(&self) -> &str {
         match self {
             TimeUnit::Day => "%Y-%m-%d",

@@ -9,6 +9,7 @@ use strum_macros::{EnumIter, EnumString};
 /// I know "party" is not the right word for that, but it's the literal translation from
 /// Spanish ("partida financiera"), I cannot think of a better name, and adds a festive
 /// touch to the code.
+#[derive(Clone)]
 pub struct Party {
     pub transactions: Vec<Transaction>,
     pub creation_date: Date,

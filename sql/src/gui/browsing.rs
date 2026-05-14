@@ -2,6 +2,7 @@ use crate::gui::{AppState, WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui::ComboBox;
 use egui::{Align, Color32, Layout};
 use egui_extras::*;
+use egui_async::StateWithData;
 
 impl AppState {
     fn is_valid_last_transactions_n(&self) -> bool {
@@ -62,71 +63,88 @@ impl AppState {
                                 ui.vertical_centered_justified(|ui| {
                                     if self.is_valid_last_transactions_n() {
                                         if ui.button("Generate!").clicked() {
-                                            self.last_transactions_n = self.last_transactions_n_temptative.parse::<i64>().expect("Failed to parse the number of last transactions.");
-                                            async {
-                                            match self.financial_database.last_transactions(self.last_transactions_n).await {
-                                                Ok(v) =>
-                                                {self.last_transaction_views = v;}
-                                                Err(e) => {
-                                                    self.throw_sqlx_error(e);},
-                                            }
-                                            };
+                                            let last_transactions_n = self
+                                                .last_transactions_n_temptative
+                                                .parse::<i64>()
+                                                .expect("Failed to parse the number of last transactions.");
+                                            let db = self.financial_database.clone();
+                                            let fut =
+                                                async move { db.last_transactions(last_transactions_n).await };
+                                            self.last_transaction_views_bind.request(fut);
                                         }
                                     }
                                 });
                                 ui.separator();
                             });
-                            strip.cell(|ui| {
-                                TableBuilder::new(ui)
-                                    .columns(Column::auto().resizable(true), 9)
-                                    .striped(true)
-                                    .cell_layout(Layout::right_to_left(Align::Center))
-                                    .header(20.0, |mut header| {
-                                        for column_name in ["Type", "Date", "Value", "Currency", "Account Name", "Category",  "Subcategory", "Description", ""] {
-                                            header.col(|ui| {
-                                                ui.strong(column_name).on_hover_text(column_name);
+                            match self.last_transaction_views_bind.state() {
+                                StateWithData::Finished(last_transaction_views) => {
+                                    strip.cell(|ui| {
+                                        TableBuilder::new(ui)
+                                            .columns(Column::auto().resizable(true), 9)
+                                            .striped(true)
+                                            .cell_layout(Layout::right_to_left(Align::Center))
+                                            .header(20.0, |mut header| {
+                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", "Category",  "Subcategory", "Description", ""] {
+                                                    header.col(|ui| {
+                                                        ui.strong(column_name).on_hover_text(column_name);
+                                                    });
+                                                }
+                                            })
+                                        .body(|mut body| {
+                                            body.row(30.0, |mut row_ui| {
+                                                for transaction_view in last_transaction_views.clone() {
+                                                    row_ui.col(|ui| {ui.label(transaction_view.transaction_type.clone());});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.date.clone());});
+                                                    row_ui.col(|ui| {ui.label(format!("{:.2}", transaction_view.value));});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.currency.clone());});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.name.clone());});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.category.clone());});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.subcategory.clone());});
+                                                    row_ui.col(|ui| {ui.label(transaction_view.description.clone());});
+                                                    row_ui.col(|ui| {
+                                                        if ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
+                                                            let db = self.financial_database.clone();
+                                                            let party_id = transaction_view.party_id;
+                                                            let fut = async move { db.party(party_id).await };
+                                                            self.party_bind.request(fut);
+                                                            match self.party_bind.state() {
+                                                                StateWithData::Finished(party) => {
+                                                                    let db = self.financial_database.clone();
+                                                                    self.party = party.clone();
+                                                                    let fut = async move { db.delete_party(party_id).await };
+                                                                    self.delete_party_bind.request(fut);
+                                                                    match self.delete_party_bind.state() {
+                                                                        StateWithData::Finished(_) => {
+                                                                            self.show_input_party_window = true;
+                                                                            self.show_browse_last_transactions_window = false;
+                                                                        },
+                                                                        StateWithData::Failed(e) => {
+                                                                            self.error_message = e.to_string();
+                                                                            self.show_error_window = true;
+                                                                        },
+                                                                        _ => {},
+                                                                    };
+                                                                },
+                                                                StateWithData::Failed(e) => {
+                                                                    self.error_message = e.to_string();
+                                                                    self.show_error_window = true;
+                                                                },
+                                                                _ => {},
+                                                            };
+                                                        }
+                                                    });
+                                                }
                                             });
-                                        }
-                                    })
-                                .body(|mut body| {
-                                    body.row(30.0, |mut row_ui| {
-                                        for transaction_view in &self.last_transaction_views.clone() {
-                                            row_ui.col(|ui| {ui.label(transaction_view.transaction_type.clone());});
-                                            row_ui.col(|ui| {ui.label(transaction_view.date.clone());});
-                                            row_ui.col(|ui| {ui.label(format!("{:.2}", transaction_view.value));});
-                                            row_ui.col(|ui| {ui.label(transaction_view.currency.clone());});
-                                            row_ui.col(|ui| {ui.label(transaction_view.name.clone());});
-                                            row_ui.col(|ui| {ui.label(transaction_view.category.clone());});
-                                            row_ui.col(|ui| {ui.label(transaction_view.subcategory.clone());});
-                                            row_ui.col(|ui| {ui.label(transaction_view.description.clone());});
-                                            row_ui.col(|ui| {
-                                                if ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
-                                                    async {
-                                                            match self.financial_database.party(transaction_view.party_id).await {
-                                                                Ok(party) => {
-                                                                    self.party = party;
-                                                                    match self.financial_database.delete_party(transaction_view.party_id).await {
-                                                                        Ok(_) => {
-                                                                                    self.show_input_party_window = true;
-                                                                                    self.show_browse_last_transactions_window = false;
-                                                                            },
-                                                                        Err(e) => {self.throw_sqlx_error(e);}
-                                                                        }
-                                                                    },
-                                                                Err(e) => {self.throw_sqlx_error(e);}
-                                                            }
-                                                        };
-                                            }
-
+                                        });
+                                        ui.separator();
                                     });
-                                        }
-                                    });
-
-
-
-                                });
-                                ui.separator();
-                            });
+                                },
+                                StateWithData::Failed(e) => {
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true;
+                                },
+                                _ => {},
+                            };
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {

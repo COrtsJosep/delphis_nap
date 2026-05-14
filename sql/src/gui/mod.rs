@@ -54,6 +54,10 @@ pub struct AppState {
     account_initial_balance_tentative: String,
 
     party: Party,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    party_bind: Bind<Party, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    delete_party_bind: Bind<(), sqlx::Error>,
 
     transaction_value: f64,
     transaction_value_tentative: String,
@@ -87,9 +91,9 @@ pub struct AppState {
     #[derivative(Default(value = "Bind::new(true)"))]
     expenses_evolution_table_bind: Bind<(Vec<String>, Vec<SqliteRow>), sqlx::Error>,
 
-    last_transactions_n: i64,
     last_transactions_n_temptative: String,
-    last_transaction_views: Vec<TransactionView>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    last_transaction_views_bind: Bind<Vec<TransactionView>, sqlx::Error>,
 
     last_fund_movements_n: i64,
     last_fund_movements_n_temptative: String,
