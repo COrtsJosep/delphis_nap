@@ -155,19 +155,25 @@ impl AppState {
     }
 
     pub fn handle_show_browse_last_fund_movements_window(&mut self, ctx: &egui::Context) -> () {
-        if self.browse_account_id >= 0 {
-            async {
-                self.browse_account_string = self
-                    .financial_database
-                    .account(self.browse_account_id)
-                    .await
-                    .unwrap() // safe due to how it is set
-                    .to_string();
-            };
-        } else {
-            self.browse_account_string = String::from("All accounts");
-        }
-
+        self.browse_account_string = match self.browse_account_id >= 0 {
+            true => {
+                let browse_account_id = self.browse_account_id;
+                let db = self.financial_database.clone();
+                let fut = async move { db.account(browse_account_id).await };
+                self.account_bind.request(fut);
+                match self.account_bind.state() {
+                    StateWithData::Finished(account) => account.to_string(),
+                    StateWithData::Failed(e) => {
+                        self.error_message = e.to_string();
+                        self.show_error_window = true;
+                        String::default()
+                    },
+                    _ => String::default(), 
+                }
+            }
+            false => String::from("All accounts"),
+        };
+        
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("browse_last_fund_movements_window"),
             egui::ViewportBuilder::default()
