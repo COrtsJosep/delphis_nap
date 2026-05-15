@@ -102,7 +102,10 @@ impl AppState {
                                                     row_ui.col(|ui| {ui.label(transaction_view.subcategory.clone());});
                                                     row_ui.col(|ui| {ui.label(transaction_view.description.clone());});
                                                     row_ui.col(|ui| {
-                                                        if ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
+                                                        if ui
+                                                            .button("Edit/Remove")
+                                                            .on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded")
+                                                            .clicked() {
                                                             let db = self.financial_database.clone();
                                                             let party_id = transaction_view.party_id;
                                                             let fut = async move { db.party(party_id).await };
@@ -262,66 +265,88 @@ impl AppState {
                                 ui.vertical_centered_justified(|ui| {
                                     if self.is_valid_last_fund_movements_n() {
                                         if ui.button("Generate!").clicked() {
-                                            self.last_fund_movements_n = self
+                                            let last_fund_movements_n = self
                                                 .last_fund_movements_n_temptative
                                                 .parse::<i64>()
                                                 .expect("Failed to parse the number of last fund_movements.");
-                                            async {
-                                            match self.financial_database.last_fund_movements(self.last_fund_movements_n, self.browse_account_id).await {
-                                                Ok(v) => {self.last_fund_movement_views = v;},
-                                                Err(e) => {self.throw_sqlx_error(e);},
-                                            }
-                                            };
+                                            let db = self.financial_database.clone();
+                                            let browse_account_id = self.browse_account_id;
+                                            let fut = async move { db.last_fund_movements(last_fund_movements_n, browse_account_id).await };
+                                            self.last_fund_movements_bind.request(fut);
                                         }
                                     }
                                 });
                                 ui.separator();
                             });
-                            strip.cell(|ui| {
-                                TableBuilder::new(ui)
-                                    .columns(Column::auto().resizable(true), 6)
-                                    .striped(true)
-                                    .cell_layout(Layout::right_to_left(Align::Center))
-                                    .header(20.0, |mut header| {
-                                        for column_name in ["Type", "Date", "Value", "Currency", "Account Name", ""] {
-                                            header.col(|ui| {
-                                                ui.strong(column_name).on_hover_text(column_name);
-                                            });
-                                        }
-                                    })
-                                .body(|mut body| {
-                                    for fund_movement_view in &self.last_fund_movement_views.clone() {
-                                        body.row(30.0, |mut row_ui| {
-                                            row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.fund_movement_type.clone());});
-                                            row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.date.clone());});
-                                            row_ui.col(|cell_ui| {cell_ui.label(format!("{:.2}", fund_movement_view.value));});
-                                            row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.currency.clone());});
-                                            row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.name.clone());});
-                                            row_ui.col(|cell_ui| {
-                                                if cell_ui.button("Edit/Remove").on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded").clicked() {
-                                                    async {
-                                                    match self.financial_database.party(fund_movement_view.party_id).await {
-                                                                Ok(party) => {
-                                                            self.party = party;
-                                                            match self.financial_database.delete_party(fund_movement_view.party_id).await {
-                                                                Ok(_) => {
+                            match self.last_fund_movements_bind.state() {
+                                StateWithData::Finished(last_fund_movement_views) => {
+                                    strip.cell(|ui| {
+                                        TableBuilder::new(ui)
+                                            .columns(Column::auto().resizable(true), 6)
+                                            .striped(true)
+                                            .cell_layout(Layout::right_to_left(Align::Center))
+                                            .header(20.0, |mut header| {
+                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", ""] {
+                                                    header.col(|ui| {
+                                                        ui.strong(column_name).on_hover_text(column_name);
+                                                    });
+                                                }
+                                            })
+                                        .body(|mut body| {
+                                            for fund_movement_view in last_fund_movement_views {
+                                                body.row(30.0, |mut row_ui| {
+                                                    row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.fund_movement_type.clone());});
+                                                    row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.date.clone());});
+                                                    row_ui.col(|cell_ui| {cell_ui.label(format!("{:.2}", fund_movement_view.value));});
+                                                    row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.currency.clone());});
+                                                    row_ui.col(|cell_ui| {cell_ui.label(fund_movement_view.name.clone());});
+                                                    row_ui.col(|cell_ui| {
+                                                        if cell_ui
+                                                            .button("Edit/Remove")
+                                                            .on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded")
+                                                            .clicked() {
+                                                            let db = self.financial_database.clone();
+                                                            let party_id = fund_movement_view.party_id;
+                                                            let fut = async move { db.party(party_id).await };
+                                                            self.party_bind.request(fut);
+                                                            match self.party_bind.state() {
+                                                                StateWithData::Finished(party) => {
+                                                                    let db = self.financial_database.clone();
+                                                                    self.party = party.clone();
+                                                                    let fut = async move { db.delete_party(party_id).await };
+                                                                    self.delete_party_bind.request(fut);
+                                                                    match self.delete_party_bind.state() {
+                                                                        StateWithData::Finished(_) => {
                                                                             self.show_input_party_window = true;
                                                                             self.show_browse_last_fund_movements_window = false;
+                                                                        },
+                                                                        StateWithData::Failed(e) => {
+                                                                            self.error_message = e.to_string();
+                                                                            self.show_error_window = true;
+                                                                        },
+                                                                        _ => {},
+                                                                    };
                                                                 },
-                                                                Err(e) => {self.throw_sqlx_error(e);},
-                                                            }
-
+                                                                StateWithData::Failed(e) => {
+                                                                    self.error_message = e.to_string();
+                                                                    self.show_error_window = true;
                                                                 },
-                                                            Err(e) => {self.throw_sqlx_error(e);}
+                                                                _ => {},
+                                                            };
                                                         }
-                                                        };
-                                                }
-                                            });
+                                                    });
+                                                });
+                                            }
                                         });
-                                    }
-                                });
-                                ui.separator();
-                            });
+                                        ui.separator();
+                                    });
+                                },
+                                StateWithData::Failed(e) => {
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true;
+                                },
+                                _ => {},
+                            };
                         });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {

@@ -101,9 +101,9 @@ pub struct AppState {
     #[derivative(Default(value = "Bind::new(true)"))]
     last_transaction_views_bind: Bind<Vec<TransactionView>, sqlx::Error>,
 
-    last_fund_movements_n: i64,
     last_fund_movements_n_temptative: String,
-    last_fund_movement_views: Vec<FundMovementView>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    last_fund_movements_bind: Bind<Vec<FundMovementView>, sqlx::Error>,
 
     #[derivative(Default(value = "-1"))]
     browse_account_id: i64,
