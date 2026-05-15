@@ -596,30 +596,35 @@ impl AppState {
             },
         );
     }
-    pub async fn handle_show_input_transaction_window(&mut self, ctx: &egui::Context) -> () {
-        match self
-            .financial_database
-            .entity(self.transaction_entity_id)
-            .await
-        {
-            Ok(transaction_entity) => {
+    pub fn handle_show_input_transaction_window(&mut self, ctx: &egui::Context) -> () {
+        let db = self.financial_database.clone();
+        let transaction_entity_id = self.transaction_entity_id;
+        let fut = || async move { db.entity(transaction_entity_id).await };
+        self.entity_bind.request_every_sec(fut, 2.5);
+        match self.entity_bind.state() {
+            StateWithData::Finished(transaction_entity) => {
                 self.transaction_entity_string = transaction_entity.to_string();
-            }
-            Err(e) => {
-                self.throw_sqlx_error(e);
-            }
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true;
+            },
+            _ => {},
         }
-        match self
-            .financial_database
-            .account(self.transaction_account_id)
-            .await
-        {
-            Ok(account) => {
-                self.transaction_account_string = account.to_string();
-            }
-            Err(e) => {
-                self.throw_sqlx_error(e);
-            }
+        
+        let db = self.financial_database.clone();
+        let transaction_account_id = self.transaction_account_id;
+        let fut = || async move { db.account(transaction_account_id).await };
+        self.account_bind.request_every_sec(fut, 2.5);
+        match self.account_bind.state() {
+            StateWithData::Finished(transaction_account) => {
+                self.transaction_account_string = transaction_account.to_string();
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true;
+            },
+            _ => {},
         }
 
         ctx.show_viewport_immediate(
