@@ -91,18 +91,18 @@ impl AppState {
                                                 }
                                             })
                                         .body(|mut body| {
-                                            body.row(30.0, |mut row_ui| {
-                                                for transaction_view in last_transaction_views.clone() {
-                                                    row_ui.col(|ui| {ui.label(transaction_view.transaction_type.clone());});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.date.clone());});
-                                                    row_ui.col(|ui| {ui.label(format!("{:.2}", transaction_view.value));});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.currency.clone());});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.name.clone());});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.category.clone());});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.subcategory.clone());});
-                                                    row_ui.col(|ui| {ui.label(transaction_view.description.clone());});
-                                                    row_ui.col(|ui| {
-                                                        if ui
+                                            for transaction_view in last_transaction_views.clone() {
+                                                body.row(30.0, |mut row_ui| {
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.transaction_type.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.date.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(format!("{:.2}", transaction_view.value));});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.currency.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.name.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.category.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.subcategory.clone());});
+                                                    row_ui.col(|col_ui| {col_ui.label(transaction_view.description.clone());});
+                                                    row_ui.col(|col_ui| {
+                                                        if col_ui
                                                             .button("Edit/Remove")
                                                             .on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded")
                                                             .clicked() {
@@ -136,8 +136,8 @@ impl AppState {
                                                             };
                                                         }
                                                     });
-                                                }
-                                            });
+                                                });
+                                            }
                                         });
                                         ui.separator();
                                     });

@@ -36,6 +36,6 @@ from (
 	inner join entities
 	on transactions.entity_id = entities.entity_id
 order by 
-	date asc,
-	party_id asc
+	date desc,
+	party_id desc
 limit ?
