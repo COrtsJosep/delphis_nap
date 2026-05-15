@@ -59,11 +59,33 @@ pub struct AppState {
     party_bind: Bind<Party, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     delete_party_bind: Bind<(), sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    insert_party_bind: Bind<(), sqlx::Error>,
     
     #[derivative(Default(value = "Bind::new(true)"))]
     account_bind: Bind<Account, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     account_ids_bind: Bind<IntoIter<i64>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    account_countries_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    insert_account_bind: Bind<i64, sqlx::Error>,
+    
+    #[derivative(Default(value = "Bind::new(true)"))]
+    entity_bind: Bind<Entity, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    entity_ids_bind: Bind<IntoIter<i64>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    entity_countries_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    entity_subtypes_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    insert_entity_bind: Bind<i64, sqlx::Error>,
+    
+    #[derivative(Default(value = "Bind::new(true)"))]
+    transaction_categories_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "Bind::new(true)"))]
+    transaction_subcategories_bind: Bind<Vec<String>, sqlx::Error>,
 
     transaction_value: f64,
     transaction_value_tentative: String,

@@ -6,6 +6,7 @@ use egui::{containers, Align, Layout, PopupCloseBehavior};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_extras::*;
 use strum::IntoEnumIterator;
+use egui_async::{StateWithData, Bind};
 
 impl AppState {
     fn clear_fields(&mut self) -> () {
@@ -66,23 +67,28 @@ impl AppState {
         }
     }
 
-    async fn is_valid_transaction_currency(&mut self) -> bool {
-        match self
-            .financial_database
-            .account(self.transaction_account_id)
-            .await
-        {
-            Ok(account) => &self.transaction_currency == account.currency(),
-            Err(e) => {
-                self.throw_sqlx_error(e);
+    fn is_valid_transaction_currency(&mut self) -> bool {
+        let mut bind: Bind<Account, sqlx::Error> = Bind::new(true);
+        let db = self.financial_database.clone();
+        let transaction_account_id = self.transaction_account_id;
+        let fut = async move { db.account(transaction_account_id).await };
+        
+        bind.request(fut);
+        
+        match bind.state() {
+            StateWithData::Finished(account) => &self.transaction_currency == account.currency(),
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true;
                 false
-            }
+            },
+            _ => false,
         }
     }
 
-    async fn are_valid_transaction_fields(&mut self) -> bool {
+    fn are_valid_transaction_fields(&mut self) -> bool {
         ((self.transaction_category.len() > 0)
-            | (self.transaction_type.is_fund_change() & self.is_valid_transaction_currency().await))
+            | (self.transaction_type.is_fund_change() & self.is_valid_transaction_currency()))
             & self.is_valid_transaction_value()
     }
 
@@ -120,22 +126,24 @@ impl AppState {
 
                             ui.label("Entity country:")
                                 .on_hover_text("Country where the entity is based.");
-                            async {
-                                match self.financial_database.entity_countries().await {
-                                    Ok(entity_countries) => {
-                                        ui.add(
-                                            AutoCompleteTextEdit::new(
-                                                &mut self.entity_country,
-                                                entity_countries,
-                                            )
-                                            .max_suggestions(10)
-                                            .highlight_matches(true),
-                                        );
-                                    }
-                                    Err(e) => {
-                                        self.throw_sqlx_error(e);
-                                    }
-                                }
+                            let db = self.financial_database.clone();
+                            let fut = || async move { db.entity_countries().await };
+                            match self.entity_countries_bind.state_or_request(fut) {
+                                StateWithData::Finished(entity_countries) => { 
+                                    ui.add(
+                                        AutoCompleteTextEdit::new(
+                                            &mut self.entity_country,
+                                            entity_countries,
+                                        )
+                                        .max_suggestions(10)
+                                        .highlight_matches(true),
+                                    );
+                                },
+                                StateWithData::Failed(e) => { 
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true; 
+                                },
+                                _ => {},
                             };
                             if self.entity_country.len() > 0 {
                                 ui.colored_label(
@@ -167,22 +175,24 @@ impl AppState {
 
                             ui.label("Entity subtype:")
                                 .on_hover_text("Sub-category of the entity.");
-                            async {
-                                match self.financial_database.entity_subtypes().await {
-                                    Ok(entity_subtypes) => {
-                                        ui.add(
-                                            AutoCompleteTextEdit::new(
-                                                &mut self.entity_subtype,
-                                                entity_subtypes,
-                                            )
-                                            .max_suggestions(10)
-                                            .highlight_matches(true),
-                                        );
-                                    }
-                                    Err(e) => {
-                                        self.throw_sqlx_error(e);
-                                    }
-                                }
+                            let db = self.financial_database.clone();
+                            let fut = || async move { db.entity_subtypes().await };
+                            match self.entity_subtypes_bind.state_or_request(fut) {
+                                StateWithData::Finished(entity_subtypes) => { 
+                                    ui.add(
+                                        AutoCompleteTextEdit::new(
+                                            &mut self.entity_subtype,
+                                            entity_subtypes,
+                                        )
+                                        .max_suggestions(10)
+                                        .highlight_matches(true),
+                                    );
+                                },
+                                StateWithData::Failed(e) => { 
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true; 
+                                },
+                                _ => {},
                             };
                             ui.end_row();
                         });
@@ -197,18 +207,21 @@ impl AppState {
                                     self.entity_type.clone(),
                                     self.entity_subtype.clone(),
                                 );
-                                async {
-                                    match self.financial_database.insert_entity(&entity).await {
-                                        Ok(entity_id) => {
-                                            self.transaction_entity_id = entity_id;
-                                            self.clear_entity_fields();
-                                            self.show_input_entity_window = false;
-                                        }
-                                        Err(e) => {
-                                            self.throw_sqlx_error(e);
-                                        }
-                                    }
-                                };
+                                let db = self.financial_database.clone();
+                                let fut = async move { db.insert_entity(&entity).await };
+                                self.insert_entity_bind.request(fut);
+                                match self.insert_entity_bind.state() {
+                                    StateWithData::Finished(entity_id) => {
+                                        self.transaction_entity_id = *entity_id;
+                                        self.clear_entity_fields();
+                                        self.show_input_entity_window = false;
+                                    },
+                                    StateWithData::Failed(e) => {
+                                        self.error_message = e.to_string();
+                                        self.show_error_window = true; 
+                                    },
+                                    _ => {},
+                                }
                             }
                         }
                     });
@@ -254,20 +267,24 @@ impl AppState {
                             ui.end_row();
 
                             ui.label("Account country: ").on_hover_text("Country where the account is based.");
-                            async {
-                                match self.financial_database.account_countries().await {
-                                    Ok(account_countries) => {
-                                        ui.add(
-                                    AutoCompleteTextEdit::new(
-                                    &mut self.account_country,
-                                        account_countries,
-                                            )
+                            let db = self.financial_database.clone();
+                            let fut = || async move { db.account_countries().await };
+                            match self.account_countries_bind.state_or_request(fut) {
+                                StateWithData::Finished(account_countries) => { 
+                                    ui.add(
+                                        AutoCompleteTextEdit::new(
+                                            &mut self.account_country,
+                                            account_countries,
+                                        )
                                         .max_suggestions(10)
                                         .highlight_matches(true),
-                                        );
-                                    },
-                                    Err(e) => {self.throw_sqlx_error(e);}
-                                }
+                                    );
+                                },
+                                StateWithData::Failed(e) => { 
+                                    self.error_message = e.to_string();
+                                    self.show_error_window = true; 
+                                },
+                                _ => {},
                             };
                             if self.account_country.len() > 0 {
                                 ui.colored_label(
@@ -342,18 +359,21 @@ impl AppState {
                                     self.account_type.clone(),
                                     self.account_initial_balance,
                                 );
-
-                                async {
-                                match self.financial_database.insert_account(&account).await {
-                                    Ok(account_id) => {
-
-                                self.transaction_account_id = account_id;
-                                self.clear_account_fields();
-
-                                self.show_input_account_window = false;
-
-                                    }, Err(e) => {self.throw_sqlx_error(e)}}
-                            };
+                                let db = self.financial_database.clone();
+                                let fut = async move { db.insert_account(&account).await };
+                                self.insert_account_bind.request(fut);
+                                match self.insert_account_bind.state() {
+                                    StateWithData::Finished(account_id) => {
+                                        self.transaction_account_id = *account_id;
+                                        self.clear_account_fields();
+                                        self.show_input_account_window = false;
+                                    },
+                                    StateWithData::Failed(e) => {
+                                        self.error_message = e.to_string();
+                                        self.show_error_window = true; 
+                                    },
+                                    _ => {},
+                                }
                             }
                         }
                     });
@@ -548,21 +568,21 @@ impl AppState {
                                 ui.vertical_centered_justified(|ui| {
                                     if self.party.is_valid() {
                                         if ui.button("Add party").clicked() {
-                                            async {
-                                                match self
-                                                    .financial_database
-                                                    .insert_party(&mut self.party)
-                                                    .await
-                                                {
-                                                    Ok(_) => {
-                                                        self.clear_fields();
-                                                        self.show_input_party_window = false;
-                                                    }
-                                                    Err(e) => {
-                                                        self.throw_sqlx_error(e);
-                                                    }
-                                                }
-                                            };
+                                            let db = self.financial_database.clone();
+                                            let mut party = self.party.clone();
+                                            let fut = async move { db.insert_party(&mut party).await };
+                                            self.insert_party_bind.request(fut);
+                                            match self.insert_party_bind.state() {
+                                                StateWithData::Finished(_) => {
+                                                    self.clear_fields();
+                                                    self.show_input_party_window = false;
+                                                },
+                                                StateWithData::Failed(e) => {
+                                                    self.error_message = e.to_string();
+                                                    self.show_error_window = true; 
+                                                },
+                                                _ => {},
+                                            }
                                         }
                                     }
                                 });
@@ -664,16 +684,14 @@ impl AppState {
                                         );
                                     }
                                 });
-                            async {
-                                if !self.is_valid_transaction_currency().await
-                                    & self.transaction_type.is_fund_change()
-                                {
-                                    ui.colored_label(
-                                        Color32::from_rgb(255, 0, 0),
-                                        "Mismatch between transaction and account currencies!",
-                                    );
-                                }
-                            };
+                            if !self.is_valid_transaction_currency()
+                                & self.transaction_type.is_fund_change()
+                            {
+                                ui.colored_label(
+                                    Color32::from_rgb(255, 0, 0),
+                                    "Mismatch between transaction and account currencies!",
+                                );
+                            }
                             ui.end_row();
 
                             ui.label("Transaction date:")
@@ -687,30 +705,39 @@ impl AppState {
                                 ComboBox::from_id_salt("Transaction account")
                                     .selected_text(format!("{}", self.transaction_account_string))
                                     .show_ui(ui, |ui| {
-                                        async {
-                                            match self.financial_database.iter_account_ids().await {
-                                                Ok(iterator) => {
-                                                    for account_id in iterator {
-                                                        let account = self
-                                                            .financial_database
-                                                            .account(account_id)
-                                                            .await
-                                                            .unwrap();
-                                                        if account.currency()
+                                        let db = self.financial_database.clone();
+                                        let fut = || async move { db.iter_account_ids().await };
+                                        match self.account_ids_bind.state_or_request(fut) {
+                                            StateWithData::Finished(account_ids) => {
+                                                for account_id in account_ids.clone() {
+                                                    let db = self.financial_database.clone();
+                                                    let fut = async move {db.account(account_id).await };
+                                                    self.account_bind.request(fut);
+                                                    match self.account_bind.state() {
+                                                        StateWithData::Finished(account) => {
+                                                            if account.currency()
                                                             == &self.transaction_currency
-                                                        {
-                                                            ui.selectable_value(
-                                                                &mut self.transaction_account_id,
-                                                                account_id,
-                                                                format!("{:}", account.to_string()),
-                                                            );
-                                                        }
-                                                    }
+                                                            {
+                                                                ui.selectable_value(
+                                                                    &mut self.transaction_account_id,
+                                                                    account_id,
+                                                                    format!("{:}", account.to_string()),
+                                                                );
+                                                            }
+                                                        },
+                                                        StateWithData::Failed(e) => {
+                                                            self.error_message = e.to_string();
+                                                            self.show_error_window = true;
+                                                        },
+                                                        _ => {},
+                                                    }           
                                                 }
-                                                Err(e) => {
-                                                    self.throw_sqlx_error(e);
-                                                }
-                                            }
+                                            },
+                                            StateWithData::Failed(e) => { 
+                                                self.error_message = e.to_string();
+                                                self.show_error_window = true; 
+                                            },
+                                            _ => {},
                                         };
                                     });
                                 if ui.button("Add new account").clicked() {
@@ -736,32 +763,41 @@ impl AppState {
                                     .show_ui(ui, |ui| {
                                         ui.text_edit_singleline(&mut self.transaction_filter)
                                             .request_focus();
-                                        async {
-                                            match self.financial_database.iter_entity_ids().await {
-                                                Ok(iterator) => {
-                                                    for entity_id in iterator {
-                                                        let entity_string = self
-                                                            .financial_database
-                                                            .entity(entity_id)
-                                                            .await
-                                                            .unwrap()
-                                                            .to_string();
-
-                                                        if entity_string.contains(
-                                                            self.transaction_filter.as_str(),
-                                                        ) {
-                                                            ui.selectable_value(
-                                                                &mut self.transaction_entity_id,
-                                                                entity_id,
-                                                                format!("{:}", entity_string),
-                                                            );
-                                                        }
-                                                    }
+                                        let db = self.financial_database.clone();
+                                        let fut = || async move { db.iter_entity_ids().await };
+                                        match self.entity_ids_bind.state_or_request(fut) {
+                                            StateWithData::Finished(entity_ids) => {
+                                                for entity_id in entity_ids.clone() {
+                                                    let db = self.financial_database.clone();
+                                                    let fut = async move {db.entity(entity_id).await };
+                                                    self.entity_bind.request(fut);
+                                                    match self.entity_bind.state() {
+                                                        StateWithData::Finished(entity) => {
+                                                            let entity_string: String = entity.to_string();
+                                                            if entity_string
+                                                                .contains(
+                                                                self.transaction_filter.as_str(),
+                                                            ) {
+                                                                ui.selectable_value(
+                                                                    &mut self.transaction_entity_id,
+                                                                    entity_id,
+                                                                    format!("{:}", entity.to_string()),
+                                                                );
+                                                            }
+                                                        },
+                                                        StateWithData::Failed(e) => {
+                                                            self.error_message = e.to_string();
+                                                            self.show_error_window = true;
+                                                        },
+                                                        _ => {},
+                                                    }           
                                                 }
-                                                Err(e) => {
-                                                    self.throw_sqlx_error(e);
-                                                }
-                                            }
+                                            },
+                                            StateWithData::Failed(e) => { 
+                                                self.error_message = e.to_string();
+                                                self.show_error_window = true; 
+                                            },
+                                            _ => {},
                                         };
                                     });
                                 if ui.button("Add new entity").clicked() {
@@ -771,26 +807,25 @@ impl AppState {
 
                                 ui.label("Transaction category:")
                                     .on_hover_text("Category of the transaction.");
-                                async {
-                                    match self
-                                        .financial_database
-                                        .transaction_categories(&self.transaction_type)
-                                        .await
-                                    {
-                                        Ok(transaction_categories) => {
-                                            ui.add(
-                                                AutoCompleteTextEdit::new(
-                                                    &mut self.transaction_category,
-                                                    transaction_categories,
-                                                )
-                                                .max_suggestions(10)
-                                                .highlight_matches(true),
-                                            );
-                                        }
-                                        Err(e) => {
-                                            self.throw_sqlx_error(e);
-                                        }
-                                    }
+                                let db = self.financial_database.clone();
+                                let transaction_type = self.transaction_type.clone();
+                                let fut = || async move { db.transaction_categories(&transaction_type).await };
+                                match self.transaction_categories_bind.state_or_request(fut) {
+                                    StateWithData::Finished(transaction_categories) => { 
+                                        ui.add(
+                                            AutoCompleteTextEdit::new(
+                                                &mut self.transaction_category,
+                                                transaction_categories,
+                                            )
+                                            .max_suggestions(10)
+                                            .highlight_matches(true),
+                                        );
+                                    },
+                                    StateWithData::Failed(e) => { 
+                                        self.error_message = e.to_string();
+                                        self.show_error_window = true; 
+                                    },
+                                    _ => {},
                                 };
                                 if self.transaction_category.len() > 0 {
                                     ui.colored_label(
@@ -808,29 +843,26 @@ impl AppState {
 
                                 ui.label("Transaction subcategory:")
                                     .on_hover_text("Subcategory of the transaction.");
-                                async {
-                                    match self
-                                        .financial_database
-                                        .transaction_subcategories(
-                                            &self.transaction_type,
-                                            self.transaction_category.clone(),
-                                        )
-                                        .await
-                                    {
-                                        Ok(transaction_subcategories) => {
-                                            ui.add(
-                                                AutoCompleteTextEdit::new(
-                                                    &mut self.transaction_subcategory,
-                                                    transaction_subcategories,
-                                                )
-                                                .max_suggestions(10)
-                                                .highlight_matches(true),
-                                            );
-                                        }
-                                        Err(e) => {
-                                            self.throw_sqlx_error(e);
-                                        }
-                                    }
+                                let db = self.financial_database.clone();
+                                let transaction_type = self.transaction_type.clone();
+                                let transaction_category = self.transaction_category.clone();
+                                let fut = || async move { db.transaction_subcategories(&transaction_type, transaction_category).await };
+                                match self.transaction_subcategories_bind.state_or_request(fut) {
+                                    StateWithData::Finished(transaction_subcategories) => { 
+                                        ui.add(
+                                            AutoCompleteTextEdit::new(
+                                                &mut self.transaction_subcategory,
+                                                transaction_subcategories,
+                                            )
+                                            .max_suggestions(10)
+                                            .highlight_matches(true),
+                                        );
+                                    },
+                                    StateWithData::Failed(e) => { 
+                                        self.error_message = e.to_string();
+                                        self.show_error_window = true; 
+                                    },
+                                    _ => {},
                                 };
                                 ui.end_row();
 
@@ -843,56 +875,54 @@ impl AppState {
 
                     ui.separator();
                     ui.vertical_centered_justified(|ui| {
-                        async {
-                            if self.are_valid_transaction_fields().await {
-                                self.transaction_value = self
-                                    .transaction_value_tentative
-                                    .parse::<f64>()
-                                    .expect("Error parsing transaction value");
+                        if self.are_valid_transaction_fields() {
+                            self.transaction_value = self
+                                .transaction_value_tentative
+                                .parse::<f64>()
+                                .expect("Error parsing transaction value");
 
-                                let transaction: Transaction = match self.transaction_type {
-                                    TransactionType::Income => Transaction::Income {
-                                        value: self.transaction_value,
-                                        currency: self.transaction_currency.clone(),
-                                        date: self.transaction_date,
-                                        category: self.transaction_category.clone(),
-                                        subcategory: self.transaction_subcategory.clone(),
-                                        description: self.transaction_description.clone(),
-                                        entity_id: self.transaction_entity_id,
-                                    },
-                                    TransactionType::Expense => Transaction::Expense {
-                                        value: self.transaction_value,
-                                        currency: self.transaction_currency.clone(),
-                                        date: self.transaction_date,
-                                        category: self.transaction_category.clone(),
-                                        subcategory: self.transaction_subcategory.clone(),
-                                        description: self.transaction_description.clone(),
-                                        entity_id: self.transaction_entity_id,
-                                    },
-                                    TransactionType::Credit => Transaction::Credit {
-                                        value: self.transaction_value,
-                                        currency: self.transaction_currency.clone(),
-                                        date: self.transaction_date,
-                                        account_id: self.transaction_account_id,
-                                    },
-                                    TransactionType::Debit => Transaction::Debit {
-                                        value: self.transaction_value,
-                                        currency: self.transaction_currency.clone(),
-                                        date: self.transaction_date,
-                                        account_id: self.transaction_account_id,
-                                    },
-                                };
+                            let transaction: Transaction = match self.transaction_type {
+                                TransactionType::Income => Transaction::Income {
+                                    value: self.transaction_value,
+                                    currency: self.transaction_currency.clone(),
+                                    date: self.transaction_date,
+                                    category: self.transaction_category.clone(),
+                                    subcategory: self.transaction_subcategory.clone(),
+                                    description: self.transaction_description.clone(),
+                                    entity_id: self.transaction_entity_id,
+                                },
+                                TransactionType::Expense => Transaction::Expense {
+                                    value: self.transaction_value,
+                                    currency: self.transaction_currency.clone(),
+                                    date: self.transaction_date,
+                                    category: self.transaction_category.clone(),
+                                    subcategory: self.transaction_subcategory.clone(),
+                                    description: self.transaction_description.clone(),
+                                    entity_id: self.transaction_entity_id,
+                                },
+                                TransactionType::Credit => Transaction::Credit {
+                                    value: self.transaction_value,
+                                    currency: self.transaction_currency.clone(),
+                                    date: self.transaction_date,
+                                    account_id: self.transaction_account_id,
+                                },
+                                TransactionType::Debit => Transaction::Debit {
+                                    value: self.transaction_value,
+                                    currency: self.transaction_currency.clone(),
+                                    date: self.transaction_date,
+                                    account_id: self.transaction_account_id,
+                                },
+                            };
 
-                                if ui.button("Add transaction").clicked() {
-                                    self.party.add_transaction(transaction);
-                                    self.clear_transaction_fields();
+                            if ui.button("Add transaction").clicked() {
+                                self.party.add_transaction(transaction);
+                                self.clear_transaction_fields();
 
-                                    self.show_input_transaction_window = false;
-                                }
-                            } else {
-                                ui.label("Invalid transaction fields");
+                                self.show_input_transaction_window = false;
                             }
-                        };
+                        } else {
+                            ui.label("Invalid transaction fields");
+                        }
                     });
                 });
                 if ctx.input(|i| i.viewport().close_requested()) {
