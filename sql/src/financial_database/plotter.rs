@@ -285,7 +285,7 @@ impl FinancialDataBase {
         // Initialize the plotted objects.
         let mut mesh = chart.configure_mesh();
         mesh.disable_x_mesh().light_line_style(WHITE);
-        mesh.x_label_formatter(&|x| match x {SegmentValue::Exact(T) => T.to_string(), SegmentValue::CenterOf(T) => T.to_string(), _ => String::default()});
+        mesh.x_label_formatter(&|x| match x {SegmentValue::Exact(t) => t.to_string(), SegmentValue::CenterOf(t) => t.to_string(), _ => String::default()});
 
         // Set the correct y-axis labels depending on the plot type.
         match barplot_type {

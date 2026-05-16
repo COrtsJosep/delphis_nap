@@ -509,8 +509,10 @@ impl FinancialDataBase {
 mod tests {
     use super::*;
     use crate::table_records::*;
-    use crate::{TEST_FINANCIAL_DATABASE_URL, TEST_ORIGINAL_FINANCIAL_DATABASE_URL};
     use sqlx::{migrate::MigrateDatabase, Sqlite};
+    const TEST_FINANCIAL_DATABASE_URL: &str = "sqlite://./data_fake/financial_database.sqlite";
+    const TEST_ORIGINAL_FINANCIAL_DATABASE_URL: &str =
+        "sqlite://./data_fake/financial_database_original.sqlite";
 
     /// tears down the test database and sets it up again
     async fn reset_database() -> () {

@@ -8,9 +8,6 @@ use crate::gui::AppState;
 use eframe::egui;
 
 const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
-const TEST_FINANCIAL_DATABASE_URL: &str = "sqlite://./data_fake/financial_database.sqlite";
-const TEST_ORIGINAL_FINANCIAL_DATABASE_URL: &str =
-    "sqlite://./data_fake/financial_database_original.sqlite";
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
