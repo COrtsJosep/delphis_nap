@@ -4,7 +4,7 @@ pub mod ser_deser;
 pub mod summaries;
 pub mod views;
 
-use crate::financial::Currency;
+use crate::financial::{AccountType, Currency, EntityType};
 use crate::table_records::*;
 use crate::FINANCIAL_DATABASE_URL;
 use jiff::{civil::Date, Zoned};
@@ -77,7 +77,23 @@ impl FinancialDataBase {
                 .await?;
             }
         } else {
-            // TODO: add default account
+            let account_name: String = String::from("Unknown");
+            let account_country: String = String::from("Unknown");
+            let account_currency: String = Currency::default().to_string();
+            let account_type: String = AccountType::default().to_string();
+            let account_creation_date: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
+            sqlx::query_file!(
+                "src/queries/insertion/insert_into_accounts.sql",
+                0i64,
+                account_name,
+                account_country,
+                account_currency,
+                account_type,
+                0.0f64,
+                account_creation_date,
+            )
+            .execute(&mut *transaction)
+            .await?;
         }
 
         let entity_table_path = Path::new("data/entity_table.csv");
@@ -98,7 +114,23 @@ impl FinancialDataBase {
                 .await?;
             }
         } else {
-            // TODO: add default entity
+            // create bogus entity
+            let entity_name: String = String::from("Unknown");
+            let entity_country: String = String::from("Unknown");
+            let entity_type: String = EntityType::default().to_string();
+            let entity_subtype: String = String::from("");
+            let entity_creation_date: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
+            sqlx::query_file!(
+                "src/queries/insertion/insert_into_entities.sql",
+                0i64,
+                entity_name,
+                entity_country,
+                entity_type,
+                entity_subtype,
+                entity_creation_date,
+            )
+            .execute(&mut *transaction)
+            .await?;
         }
 
         let party_table_path = Path::new("data/party_table.csv");
