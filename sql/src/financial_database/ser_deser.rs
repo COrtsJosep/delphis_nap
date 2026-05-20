@@ -232,7 +232,7 @@ impl FinancialDataBase {
     }
 
     pub(crate) async fn iter_entity_ids(&self) -> Result<IntoIter<i64>, sqlx::Error> {
-        let rows = sqlx::query!("select entity_id from entities order by name asc limit 20")
+        let rows = sqlx::query!("select entity_id from entities order by name asc")
             .fetch_all(&self.pool)
             .await?;
 

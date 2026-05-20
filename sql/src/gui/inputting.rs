@@ -2,7 +2,7 @@ use crate::financial::*;
 use crate::gui::{AppState, WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui;
 use eframe::egui::{Color32, ComboBox};
-use egui::{containers, Align, Layout, PopupCloseBehavior};
+use egui::{Align, Layout, PopupCloseBehavior};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_extras::*;
 use strum::IntoEnumIterator;
@@ -597,10 +597,13 @@ impl AppState {
         );
     }
     pub fn handle_show_input_transaction_window(&mut self, ctx: &egui::Context) -> () {
-        let db = self.financial_database.clone();
-        let transaction_entity_id = self.transaction_entity_id;
-        let fut = || async move { db.entity(transaction_entity_id).await };
-        self.entity_bind.request_every_sec(fut, 2.5);
+        if self.poll_entity_string {
+            self.poll_entity_string = false;
+            let db = self.financial_database.clone();
+            let transaction_entity_id = self.transaction_entity_id;
+            let fut = async move { db.entity(transaction_entity_id).await };
+            self.entity_bind.request(fut);
+        }
         match self.entity_bind.state() {
             StateWithData::Finished(transaction_entity) => {
                 self.transaction_entity_string = transaction_entity.to_string();
@@ -612,10 +615,13 @@ impl AppState {
             _ => {},
         }
         
-        let db = self.financial_database.clone();
-        let transaction_account_id = self.transaction_account_id;
-        let fut = || async move { db.account(transaction_account_id).await };
-        self.account_bind.request_every_sec(fut, 2.5);
+        if self.poll_account_string {
+            self.poll_account_string = false;
+            let db = self.financial_database.clone();
+            let transaction_account_id = self.transaction_account_id;
+            let fut = async move { db.account(transaction_account_id).await };
+            self.account_bind.request(fut);
+        }
         match self.account_bind.state() {
             StateWithData::Finished(transaction_account) => {
                 self.transaction_account_string = transaction_account.to_string();
@@ -710,40 +716,42 @@ impl AppState {
                                 ComboBox::from_id_salt("Transaction account")
                                     .selected_text(format!("{}", self.transaction_account_string))
                                     .show_ui(ui, |ui| {
-                                        let db = self.financial_database.clone();
-                                        let fut = || async move { db.iter_account_ids().await };
-                                        match self.account_ids_bind.state_or_request(fut) {
-                                            StateWithData::Finished(account_ids) => {
-                                                for account_id in account_ids.clone() {
-                                                    let db = self.financial_database.clone();
-                                                    let fut = async move {db.account(account_id).await };
-                                                    self.account_bind.request(fut);
-                                                    match self.account_bind.state() {
-                                                        StateWithData::Finished(account) => {
-                                                            if account.currency()
-                                                            == &self.transaction_currency
-                                                            {
-                                                                ui.selectable_value(
-                                                                    &mut self.transaction_account_id,
-                                                                    account_id,
-                                                                    format!("{:}", account.to_string()),
-                                                                );
-                                                            }
-                                                        },
-                                                        StateWithData::Failed(e) => {
-                                                            self.error_message = e.to_string();
-                                                            self.show_error_window = true;
-                                                        },
-                                                        _ => {},
-                                                    }           
+                                        match self.accounts_bind.state_or_request(|| {
+                                            let db = self.financial_database.clone();
+                                            let currency = self.transaction_currency.clone();
+                                            async move {
+                                                let account_ids = db.iter_account_ids().await?;
+                                                let mut accounts = Vec::new();
+                                                for account_id in account_ids {
+                                                    let account = db.account(account_id).await?;
+                                                    if account.currency() == &currency {
+                                                        accounts.push((account_id, account));
+                                                    }
+                                                }
+                                                Ok(accounts)
+                                            }
+                                        }) {
+                                            StateWithData::Finished(accounts) => {
+                                                for (account_id, account) in accounts {
+                                                    if ui.selectable_value(
+                                                        &mut self.transaction_account_id,
+                                                        *account_id,  // Use the account_id from the loop
+                                                        format!("{}", account.to_string()),
+                                                    ).clicked() {
+                                                        self.poll_account_string = true;
+                                                    }
+                                                    
                                                 }
                                             },
-                                            StateWithData::Failed(e) => { 
+                                            StateWithData::Pending => {
+                                                ui.spinner();
+                                            },
+                                            StateWithData::Failed(e) => {
                                                 self.error_message = e.to_string();
-                                                self.show_error_window = true; 
+                                                self.show_error_window = true;
                                             },
                                             _ => {},
-                                        };
+                                        }
                                     });
                                 if ui.button("Add new account").clicked() {
                                     self.show_input_account_window = true;
@@ -762,48 +770,51 @@ impl AppState {
                                 // it is not fund change
                                 ui.label("Transaction entity:")
                                     .on_hover_text("Entity with whom the transaction is made.");
-                                containers::ComboBox::from_id_salt("Transaction entity")
+                                ComboBox::from_id_salt("Transaction entity")
                                     .selected_text(format!("{}", self.transaction_entity_string))
                                     .close_behavior(PopupCloseBehavior::CloseOnClick)
                                     .show_ui(ui, |ui| {
-                                        ui.text_edit_singleline(&mut self.transaction_filter)
-                                            .request_focus();
+                                        // Filter input
+                                        let response = ui.text_edit_singleline(&mut self.transaction_filter);
+                                        response.request_focus();
+                                        
                                         let db = self.financial_database.clone();
-                                        let fut = || async move { db.iter_entity_ids().await };
-                                        match self.entity_ids_bind.state_or_request(fut) {
-                                            StateWithData::Finished(entity_ids) => {
-                                                for entity_id in entity_ids.clone() {
-                                                    let db = self.financial_database.clone();
-                                                    let fut = async move {db.entity(entity_id).await };
-                                                    self.entity_bind.request(fut);
-                                                    match self.entity_bind.state() {
-                                                        StateWithData::Finished(entity) => {
-                                                            let entity_string: String = entity.to_string();
-                                                            if entity_string
-                                                                .contains(
-                                                                self.transaction_filter.as_str(),
-                                                            ) {
-                                                                ui.selectable_value(
-                                                                    &mut self.transaction_entity_id,
-                                                                    entity_id,
-                                                                    format!("{:}", entity.to_string()),
-                                                                );
-                                                            }
-                                                        },
-                                                        StateWithData::Failed(e) => {
-                                                            self.error_message = e.to_string();
-                                                            self.show_error_window = true;
-                                                        },
-                                                        _ => {},
-                                                    }           
+                                        let filter = self.transaction_filter.clone();
+                                        let fut = || async move {
+                                            let entity_ids = db.iter_entity_ids().await?;
+                                            let mut entities = Vec::new();
+                                            for entity_id in entity_ids {
+                                                let entity = db.entity(entity_id).await?;
+                                                entities.push((entity_id, entity));
+                                            }
+                                            Ok(entities)
+                                        };
+                                        match self.entities_bind.state_or_request(fut) {
+                                            StateWithData::Finished(entities) => {
+                                                let mut i: i64 = 0;
+                                                for (entity_id, entity) in entities {
+                                                    let entity_string = entity.to_string();
+                                                    if entity_string.contains(&filter) & (i < 20) {
+                                                        if ui.selectable_value(
+                                                            &mut self.transaction_entity_id,
+                                                            *entity_id,
+                                                            entity_string,
+                                                        ).clicked() {
+                                                            self.poll_entity_string = true;
+                                                        }
+                                                        i += 1;
+                                                    }
                                                 }
                                             },
-                                            StateWithData::Failed(e) => { 
+                                            StateWithData::Pending => {
+                                                ui.spinner();
+                                            },
+                                            StateWithData::Failed(e) => {
                                                 self.error_message = e.to_string();
-                                                self.show_error_window = true; 
+                                                self.show_error_window = true;
                                             },
                                             _ => {},
-                                        };
+                                        }
                                     });
                                 if ui.button("Add new entity").clicked() {
                                     self.show_input_entity_window = true;
