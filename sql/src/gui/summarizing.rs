@@ -238,6 +238,7 @@ impl AppState {
 
                 egui::CentralPanel::default().show_inside(ctx, |ui| {
                     let currency_label: String = self.expenses_evolution_currency.to_string();
+                    let time_unit_label_prospective: String = self.expenses_evolution_time_unit_prospective.to_string();
                     let time_unit_label: String = self.expenses_evolution_time_unit.to_string();
 
                     StripBuilder::new(ui)
@@ -271,13 +272,13 @@ impl AppState {
                                         ui.label("Time unit:")
                                             .on_hover_text("Time unit to aggregate expenses.");
                                         ComboBox::from_id_salt("Expenses evolution time unit")
-                                            .selected_text(format!("{}", time_unit_label))
+                                            .selected_text(format!("{}", time_unit_label_prospective))
                                             .show_ui(ui, |ui| {
                                                 for possible_expenses_evolution_time_unit in
                                                     TimeUnit::iter()
                                                 {
                                                     ui.selectable_value(
-                                                        &mut self.expenses_evolution_time_unit,
+                                                        &mut self.expenses_evolution_time_unit_prospective,
                                         possible_expenses_evolution_time_unit.clone(),
                                         format!("{possible_expenses_evolution_time_unit}"),
                                         );
@@ -289,8 +290,9 @@ impl AppState {
                                         if ui.button("Generate!").clicked() {
                                             let currency =
                                                 self.expenses_evolution_currency.clone();
-                                            let time_unit =
-                                                self.expenses_evolution_time_unit.clone();
+                                            self.expenses_evolution_time_unit =
+                                                self.expenses_evolution_time_unit_prospective.clone();
+                                            let time_unit = self.expenses_evolution_time_unit.clone();
                                             let db = self.financial_database.clone();
                                             let fut =
                                                 async move { db.evolution_table(&currency, &time_unit).await };
@@ -314,10 +316,10 @@ impl AppState {
                                             .header(20.0, |mut header| {
                                                 header.col(|ui| {
                                                     ui.strong(
-                                                        self.expenses_evolution_time_unit.to_string(),
+                                                        &time_unit_label,
                                                     )
                                                     .on_hover_text(
-                                                        self.expenses_evolution_time_unit.to_string(),
+                                                        &time_unit_label,
                                                     );
                                                 });
                                                 for column_name in

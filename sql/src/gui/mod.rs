@@ -117,6 +117,7 @@ pub struct AppState {
 
     expenses_evolution_currency: Currency,
     expenses_evolution_time_unit: TimeUnit,
+    expenses_evolution_time_unit_prospective: TimeUnit,
     #[derivative(Default(value = "Bind::new(true)"))]
     expenses_evolution_table_bind: Bind<(Vec<String>, Vec<SqliteRow>), sqlx::Error>,
 

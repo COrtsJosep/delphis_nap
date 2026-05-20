@@ -173,8 +173,10 @@ impl FinancialDataBase {
     ) -> Result<(Vec<String>, Vec<SqliteRow>), sqlx::Error> {
         let currency_to_string: String = currency_to.to_string();
         let time_unit_format: String = time_unit.date_format().to_string();
+        
+        let mut transaction = self.pool.begin().await?;
         let unique_categories: Vec<String> = sqlx::query!("select distinct category from expenses")
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *transaction)
             .await?
             .into_iter()
             .map(|record| record.category)
@@ -187,7 +189,7 @@ impl FinancialDataBase {
             time_unit_format,
             time_unit_format
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
 
         let mut query_string: String = String::from("select date, ");
@@ -201,10 +203,15 @@ impl FinancialDataBase {
         }
 
         query_string = query_string[..(query_string.len() - 1)].to_string() // remove last comma
-            + " from expense_evolution_temporary";
+            + " from expense_evolution_temporary group by date";
         let query_str: &str = &query_string;
-
-        let rows: Vec<SqliteRow> = sqlx::query(query_str).fetch_all(&self.pool).await?;
+        let rows: Vec<SqliteRow> = sqlx::query(query_str).fetch_all(&mut *transaction).await?;
+        
+        sqlx::query!("drop table expense_evolution_temporary")
+            .execute(&mut *transaction)
+            .await?;
+        
+        transaction.commit().await?;
 
         Ok((unique_categories, rows))
     }

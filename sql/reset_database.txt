@@ -8,3 +8,4 @@ sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_fund_
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_currency_exchange_table.sql
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_expense_temporary_table.sql
 sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_monthly_expenses_temporary_table.sql
+sqlite3 data/financial_database.sqlite < src/queries/table_creation/create_expense_evolution_temporary_table.sql
