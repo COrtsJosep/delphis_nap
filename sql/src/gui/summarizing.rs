@@ -112,10 +112,11 @@ impl AppState {
                             };
                         });
                     });
-                });
                 if ctx.input(|i| i.viewport().close_requested()) {
                     self.show_expense_summary_window = false;
                 }
+            },
+        );
     }
     pub fn handle_show_fund_stand_window(&mut self, ctx: &egui::Context) -> () {
         ctx.show_viewport_immediate(
@@ -130,7 +131,7 @@ impl AppState {
                 );
 
                 egui::CentralPanel::default().show_inside(ctx, |ui| {
-                    let currency_label: String = self.current_fund_stand_currency.clone().map_or("None".to_string(), |currency| currency.to_string());
+                    let currency_label: String = self.current_fund_stand_prospective_currency.clone().map_or("None".to_string(), |currency| currency.to_string());
 
 
                     StripBuilder::new(ui)
@@ -148,13 +149,13 @@ impl AppState {
                                             .show_ui(ui, |ui| {
                                                 for possible_current_fund_stand_currency in Currency::iter() {
                                                     ui.selectable_value(
-                                                        &mut self.current_fund_stand_currency,
+                                                        &mut self.current_fund_stand_prospective_currency,
                                         Some(possible_current_fund_stand_currency.clone()),
                                         format!("{possible_current_fund_stand_currency}"),
                                         );
                                                 }
                                                 ui.selectable_value(
-                                                    &mut self.current_fund_stand_currency,
+                                                    &mut self.current_fund_stand_prospective_currency,
                                                     None,
                                                     String::from("None")
                                                     );
@@ -164,11 +165,12 @@ impl AppState {
                                         ui.label("");
                                         if ui.button("Generate!").clicked() {
                                             let currency =
-                                                self.current_fund_stand_currency.clone();
+                                                self.current_fund_stand_prospective_currency.clone();
                                             let db = self.financial_database.clone();
                                             let fut =
                                                 async move { db.current_fund_stand(currency.as_ref()).await };
                                             self.current_fund_stand_bind.request(fut);
+                                            self.current_fund_stand_current_currency = self.current_fund_stand_prospective_currency.clone();
                                         }
                                     });
                                 ui.separator();
@@ -177,11 +179,11 @@ impl AppState {
                                 StateWithData::Finished(current_fund_stand_rows) => {
                                     strip.cell(|ui| {
                                         TableBuilder::new(ui)
-                                                .columns(Column::auto().resizable(true), match self.current_fund_stand_currency.clone() {Some(_c) => 4, None => 5})
+                                                .columns(Column::auto().resizable(true), match self.current_fund_stand_current_currency.clone() {Some(_c) => 4, None => 5})
                                                 .striped(true)
                                                 .cell_layout(Layout::right_to_left(Align::Center))
                                                 .header(20.0, |mut header| {
-                                                    let column_names: Vec<String> = match self.current_fund_stand_currency.clone() {
+                                                    let column_names: Vec<String> = match self.current_fund_stand_current_currency.clone() {
                                                         Some(c) => vec!["Name".into(), "Country".into(), "Account Type".into(), c.to_string()],
                                                         None => vec!["Name".into(), "Country".into(), "Currency".into(), "Account Type".into(), "Value".into()]
                                                     };
@@ -199,7 +201,7 @@ impl AppState {
                                                             ui.label(current_fund_stand_row.name.clone());});
                                                             row_ui.col(|ui| {
                                                             ui.label(current_fund_stand_row.country.clone());});
-                                                            match self.current_fund_stand_currency.clone() {
+                                                            match self.current_fund_stand_current_currency.clone() {
                                                                 Some(_c) => {},
                                                                 None => {row_ui.col(|ui| {ui.label(current_fund_stand_row.currency.clone());});}
                                                             }

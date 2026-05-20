@@ -110,7 +110,8 @@ pub struct AppState {
     #[derivative(Default(value = "Bind::new(true)"))]
     expense_summary_bind: Bind<Vec<ExpenseSummaryRow>, sqlx::Error>,
 
-    current_fund_stand_currency: Option<Currency>,
+    current_fund_stand_prospective_currency: Option<Currency>,
+    current_fund_stand_current_currency: Option<Currency>,
     #[derivative(Default(value = "Bind::new(true)"))]
     current_fund_stand_bind: Bind<Vec<CurrentFundStandRow>, sqlx::Error>,
 
