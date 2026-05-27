@@ -17,7 +17,6 @@ use egui_async::Bind;
 use egui_extras::{Size, StripBuilder};
 use jiff::{civil::Date, Zoned};
 use sqlx::sqlite::SqliteRow;
-use std::vec::IntoIter;
 
 const WINDOW_HEIGHT: f32 = 400.0;
 const WINDOW_WIDTH: f32 = 600.0;
@@ -67,13 +66,13 @@ pub struct AppState {
     #[derivative(Default(value = "Bind::new(true)"))]
     accounts_bind: Bind<Vec<(i64, Account)>, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
-    account_ids_bind: Bind<IntoIter<i64>, sqlx::Error>,
-    #[derivative(Default(value = "Bind::new(true)"))]
     account_countries_bind: Bind<Vec<String>, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     insert_account_bind: Bind<i64, sqlx::Error>,
     #[derivative(Default(value = "true"))]
     poll_account_string: bool,
+    #[derivative(Default(value = "true"))]
+    reload_browse_account_string: bool,
     
     #[derivative(Default(value = "Bind::new(true)"))]
     entity_bind: Bind<Entity, sqlx::Error>,

@@ -158,12 +158,15 @@ impl AppState {
     }
 
     pub fn handle_show_browse_last_fund_movements_window(&mut self, ctx: &egui::Context) -> () {
+        if self.reload_browse_account_string {
+            let browse_account_id = self.browse_account_id;
+            let db = self.financial_database.clone();
+            let fut = async move { db.account(browse_account_id).await };
+            self.account_bind.request(fut);
+            self.reload_browse_account_string = false;
+        }
         self.browse_account_string = match self.browse_account_id >= 0 {
-            true => {
-                let browse_account_id = self.browse_account_id;
-                let db = self.financial_database.clone();
-                let fut = async move { db.account(browse_account_id).await };
-                self.account_bind.request(fut);
+            true => {        
                 match self.account_bind.state() {
                     StateWithData::Finished(account) => account.to_string(),
                     StateWithData::Failed(e) => {
@@ -218,37 +221,37 @@ impl AppState {
                                         ComboBox::from_id_salt("Account")
                                             .selected_text(format!("{}", self.browse_account_string))
                                             .show_ui(ui, |ui| {
-                                                ui.selectable_value(
+                                                if ui.selectable_value(
                                                     &mut self.browse_account_id,
                                                     -1,
                                                     String::from("All accounts")
-                                                );
+                                                ).clicked() {
+                                                    self.reload_browse_account_string = true;
+                                                }
+                                                
                                                 let db = self.financial_database.clone();
-                                                let fut = async move { db.iter_account_ids().await };
-                                                self.account_ids_bind.request(fut);
-                                                match self.account_ids_bind.state() {
+                                                let fut = || async move {
+                                                    let account_ids = db.iter_account_ids().await?;
+                                                    let mut accounts = Vec::new();
+                                                    for account_id in account_ids {
+                                                        let account = db.account(account_id).await?;
+                                                        accounts.push((account_id, account));
+                                                    }
+                                                    Ok(accounts)
+                                                };
+                                                match self.accounts_bind.state_or_request(fut) {
                                                     StateWithData::Finished(iterator) => {
-                                                        for account_id in iterator.clone() {
-                                                            let db = self.financial_database.clone();
-                                                            let fut = async move { db.account(account_id).await };
-                                                            self.account_bind.request(fut);
-                                                            match self.account_bind.state() {
-                                                                StateWithData::Finished(account) => {
-                                                                    ui.selectable_value(
-                                                                        &mut self.browse_account_id,
-                                                                        account_id,
-                                                                        format!(
-                                                                            "{:}",
-                                                                            account.to_string()
-                                                                        ),
-                                                                    );
-                                                                },
-                                                                StateWithData::Failed(e) => {
-                                                                    self.error_message = e.to_string();
-                                                                    self.show_error_window = true;
-                                                                },
-                                                                _ => {},
-                                                            };
+                                                        for (account_id, account) in iterator {
+                                                            if ui.selectable_value(
+                                                                &mut self.browse_account_id,
+                                                                *account_id,
+                                                                format!(
+                                                                    "{:}",
+                                                                    account.to_string()
+                                                                ),
+                                                            ).clicked() {
+                                                                self.reload_browse_account_string = true;    
+                                                            }
                                                         }
                                                     },
                                                     StateWithData::Failed(e) => {
