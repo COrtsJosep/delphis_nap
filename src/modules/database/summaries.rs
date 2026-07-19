@@ -150,7 +150,7 @@ impl DataBase {
                     col("account_type"),
                     col(currency_to.to_string()).round(2),
                 ])
-                .filter(col(currency_to.to_string()).gt_eq(lit(0.01)))
+                .filter(col(currency_to.to_string()).abs().gt_eq(lit(0.01)))
                 .select([all().name().map(|name| {
                     Ok(PlSmallStr::from_string(capitalize_every_word(
                         name.replace("_", " "),
