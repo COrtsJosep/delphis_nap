@@ -84,7 +84,7 @@ impl AppState {
                                             .striped(true)
                                             .cell_layout(Layout::right_to_left(Align::Center))
                                             .header(20.0, |mut header| {
-                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", "Category",  "Subcategory", "Description", ""] {
+                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", "Category",  "Subcategory", "Description", "Action"] {
                                                     header.col(|ui| {
                                                         ui.strong(column_name).on_hover_text(column_name);
                                                     });
@@ -289,7 +289,7 @@ impl AppState {
                                             .striped(true)
                                             .cell_layout(Layout::right_to_left(Align::Center))
                                             .header(20.0, |mut header| {
-                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", ""] {
+                                                for column_name in ["Type", "Date", "Value", "Currency", "Account Name", "Action"] {
                                                     header.col(|ui| {
                                                         ui.strong(column_name).on_hover_text(column_name);
                                                     });

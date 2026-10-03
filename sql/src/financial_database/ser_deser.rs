@@ -381,7 +381,7 @@ impl FinancialDataBase {
                 Transaction::Expense {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(DATE_FORMAT, row.date.as_str()).unwrap(),
                     category: row.category,
                     subcategory: row.subcategory,
                     description: row.description,
@@ -396,7 +396,7 @@ impl FinancialDataBase {
                 Transaction::Income {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(DATE_FORMAT, row.date.as_str()).unwrap(),
                     category: row.category,
                     subcategory: row.subcategory,
                     description: row.description,
@@ -414,7 +414,7 @@ impl FinancialDataBase {
                 Transaction::Credit {
                     value: row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(DATE_FORMAT, row.date.as_str()).unwrap(),
                     account_id: row.account_id,
                 }
             }
@@ -429,7 +429,7 @@ impl FinancialDataBase {
                 Transaction::Debit {
                     value: -1.0 * row.value,
                     currency: Currency::from_str(row.currency.as_str()).unwrap(),
-                    date: Date::strptime(row.date.as_str(), DATE_FORMAT).unwrap(),
+                    date: Date::strptime(DATE_FORMAT, row.date.as_str()).unwrap(),
                     account_id: row.account_id,
                 }
             }
