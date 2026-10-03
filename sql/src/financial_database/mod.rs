@@ -27,7 +27,7 @@ struct ECBRecord {
     #[serde(rename = "TIME_PERIOD")]
     date: String,
     #[serde(rename = "OBS_VALUE")]
-    value: Option<f64>,
+    value: Option<f64>,  // days with no observation
 }
 
 impl FinancialDataBase {
@@ -215,120 +215,183 @@ impl FinancialDataBase {
 
         Ok(pool)
     }
+    
+    async fn init_date_table(pool: &SqlitePool, start_date_string: &String, end_date_string: &String) -> Result<(), sqlx::Error> {
+        // fills up the date table with dates from start_date_string up to end_date_string, with no gaps
+        let mut current_date: Date = Date::strptime("%Y-%m-%d", &start_date_string).unwrap();
+        let end_date: Date = Date::strptime("%Y-%m-%d", &end_date_string).unwrap();
+        let mut transaction = pool.begin().await?;
+        
+        while current_date <= end_date {
+            let current_date_string: String = current_date.strftime(DATE_FORMAT).to_string();
+            sqlx::query_file!(
+                "src/queries/insertion/insert_into_dates.sql",
+                current_date_string
+            )
+            .execute(&mut *transaction)
+            .await?;
+        
+            current_date = current_date.tomorrow().unwrap();
+        }
+        
+        transaction.commit().await
+    }
+    
+    async fn update_ecb_exchange_table(
+            pool: &SqlitePool, 
+            currency_to: String,
+            last_date: String
+        ) -> Result<(), sqlx::Error> {
+        // fetches the ECB data, reads the csv, and inserts the new data
+        let mut currency_from: String = BASE_CURRENCY.to_string();
+        let mut currency_to: String = currency_to.clone();
+        let start_date: String = Date::strptime("%Y-%m-%d", &last_date)
+            .unwrap()
+            .tomorrow()
+            .unwrap()
+            .strftime("%Y-%m-%d")
+            .to_string();
+        let url = format!(
+            "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
+            currency_to,
+            currency_from,
+            start_date
+        );
+
+        let response = reqwest::get(url).await.unwrap();
+        let csv_data = response.bytes().await.unwrap();
+        let cursor = Cursor::new(csv_data.clone());
+        let mut reader = csv::Reader::from_reader(cursor);
+        let records = reader.deserialize::<ECBRecord>();
+        let mut transaction = pool.begin().await?;
+        
+        for result in records {
+            let record: ECBRecord = result.expect("Corrupted record in the ECB csv");
+            let record_date: String = record.date;
+            if let Some(value) = record.value {
+                let mut record_value: f64 = value;
+            
+                for _ in 0..2 {
+                    let id: String =
+                        format!("{}_{}_{}", record_date, currency_from, currency_to);
+                    sqlx::query_file!(
+                        "src/queries/insertion/insert_into_ecb_exchanges.sql",
+                        id,
+                        record_date,
+                        currency_from,
+                        currency_to,
+                        record_value
+                    )
+                    .execute(&mut *transaction)
+                    .await?;
+
+                    let temp: String = currency_from;
+                    currency_from = currency_to;
+                    currency_to = temp;
+                    record_value = 1.0 / record_value;
+                }
+            }
+        }
+        transaction.commit().await
+    }
 
     async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        sqlx::query_file!("src/queries/table_creation/create_currency_exchange_table.sql")
+        let earliest_calendar_day_string: String = String::from("1999-01-03");
+        let latest_calendar_day_string: String = String::from("2049-12-31");
+        
+        // first: create necessary tables:
+        //      - EBC exchange rates table (raw data, with holes in the timeline)
+        //      - date table (just a table with all dates, no holes
+        //      - currency exchange table (dropped and recreated each time)
+        sqlx::query_file!("src/queries/table_creation/create_ecb_exchange_table.sql")
+            .execute(pool)
+            .await?;
+            
+        sqlx::query_file!("src/queries/table_creation/create_date_table.sql")
+            .execute(pool)
+            .await?;
+        
+        let date_table_rowcount: i64 =
+            sqlx::query!("select count(1) as rowcount from dates")
+                .fetch_one(pool)
+                .await?
+                .rowcount;          
+                
+        if date_table_rowcount == 0i64 {
+            FinancialDataBase::init_date_table(
+                &pool,
+                &earliest_calendar_day_string,
+                &latest_calendar_day_string
+            )
+            .await?;
+        }     
+
+        sqlx::query!("drop table if exists currency_exchanges")
             .execute(pool)
             .await?;
 
-        let last_date: String =
-            match sqlx::query!("select max(date) as max_date from currency_exchanges")
-                .fetch_one(pool)
-                .await
-            {
-                Ok(row) => match row.max_date {
-                    Some(date) => date,
-                    None => String::from("1999-01-04"),
-                },
-                Err(_e) => String::from("1999-01-04"), // start of the time series
-            };
+
+        sqlx::query_file!("src/queries/table_creation/create_currency_exchange_table.sql")
+            .execute(pool)
+            .await?;
+        
         let today: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
-        if last_date >= today {
-            return Ok(());
-        }
-
-        let mut transaction = pool.begin().await?;
-
         for other_currency in Currency::iter() {
             if other_currency == BASE_CURRENCY {
                 continue;
             }
-            let mut currency_from: String = BASE_CURRENCY.to_string();
-            let mut currency_to: String = other_currency.to_string();
-            let start_date: String = Date::strptime("%Y-%m-%d", &last_date)
-                .unwrap()
-                .tomorrow()
-                .unwrap()
-                .strftime("%Y-%m-%d")
-                .to_string();
-            let url = format!(
-                "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
+            
+            let currency_from: String = BASE_CURRENCY.to_string();
+            let currency_to: String = other_currency.to_string();
+                
+            let last_date: String =
+                match sqlx::query!("select max(date) as max_date from ecb_exchanges where currency_to = ?", currency_to)
+                    .fetch_one(pool)
+                    .await
+                    {
+                        Ok(row) => match row.max_date {
+                            Some(date) => date,
+                            None => earliest_calendar_day_string.clone(),
+                        },
+                        Err(_e) => earliest_calendar_day_string.clone(), // start of the time series
+                    };
+            
+            if last_date < today {
+                FinancialDataBase::update_ecb_exchange_table(
+                    &pool, 
+                    currency_to.clone(),
+                    last_date
+                ).await?;
+            }
+            
+            // first for from->to
+            sqlx::query_file!(
+                "src/queries/insertion/insert_into_currency_exchanges.sql",
+                currency_from,
+                currency_to,
+                today,
+                currency_from,
                 currency_to,
                 currency_from,
-                start_date
-            );
-
-            let response = reqwest::get(url).await.unwrap();
-            let csv_data = response.bytes().await.unwrap();
-            let cursor = Cursor::new(csv_data);
-            let mut reader = csv::Reader::from_reader(cursor);
-            let mut records = reader.deserialize::<ECBRecord>();
-            let mut value: f64 = 1.0;
-
-            let current_record_wrapped = records.next();
-            if current_record_wrapped.is_none() {
-                continue; // it's an empty csv
-            }
-            let mut current_record: ECBRecord = current_record_wrapped.unwrap().unwrap();
-            let mut flag: bool = true;
-            while flag {
-                let next_record: ECBRecord = match records.next() {
-                    Some(next_record_wrapped) => next_record_wrapped.unwrap(),
-                    None => {
-                        flag = false; // no next record, this will be the last iter
-                        ECBRecord {
-                            date: Zoned::now()
-                                .date()
-                                .tomorrow()
-                                .expect("We got to the end of the calendar?!")
-                                .strftime(DATE_FORMAT)
-                                .to_string(),
-                            value: None, // value is irrelevant
-                        }
-                    }
-                };
-
-                let mut current_record_date: Date =
-                    Date::strptime("%Y-%m-%d", current_record.date.as_str()).unwrap();
-                let next_record_date: Date =
-                    Date::strptime("%Y-%m-%d", next_record.date.as_str()).unwrap();
-                value = current_record.value.unwrap_or(value);
-
-                while current_record_date != next_record_date {
-                    // add records to the database until the next date is reached
-                    for _ in 0..2 {
-                        // add from->to value, and then add to->from 1/value
-                        let date_string: String =
-                            current_record_date.strftime(DATE_FORMAT).to_string();
-                        let id: String =
-                            format!("{}_{}_{}", date_string, currency_from, currency_to,);
-                        sqlx::query_file!(
-                            "src/queries/insertion/insert_into_currency_exchanges.sql",
-                            id,
-                            date_string,
-                            currency_from,
-                            currency_to,
-                            value,
-                        )
-                        .execute(&mut *transaction)
-                        .await?;
-
-                        let temp: String = currency_from;
-                        currency_from = currency_to;
-                        currency_to = temp;
-                        value = 1.0 / value;
-                    }
-
-                    current_record_date = current_record_date
-                        .tomorrow()
-                        .expect("Got to the end of the calendar?!");
-                }
-
-                current_record = next_record;
-            }
+                currency_to
+            )
+            .execute(pool)
+            .await?;
+            
+            // now the same, but for to->from
+            sqlx::query_file!(
+                "src/queries/insertion/insert_into_currency_exchanges.sql",
+                currency_to,
+                currency_from,
+                today,
+                currency_to,
+                currency_from,
+                currency_to,
+                currency_from,
+            )
+            .execute(pool)
+            .await?;
         }
-        transaction.commit().await?;
-
         Ok(())
     }
 
@@ -357,7 +420,7 @@ impl Default for FinancialDataBase {
         Runtime::new().unwrap().block_on(async {
             Self::init(FINANCIAL_DATABASE_URL)
                 .await
-                .expect("Pray Tux this never happens.")
+                .expect("Pray Tux this never happens")
         })
     }
 }
