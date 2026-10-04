@@ -60,6 +60,7 @@ pub struct AppState {
     delete_party_bind: Bind<(), sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     insert_party_bind: Bind<(), sqlx::Error>,
+    to_delete_party_id: i64,
     
     #[derivative(Default(value = "Bind::new(true)"))]
     account_bind: Bind<Account, sqlx::Error>,

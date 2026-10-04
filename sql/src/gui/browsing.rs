@@ -22,6 +22,34 @@ impl AppState {
     }
 
     pub fn handle_show_browse_last_transactions_window(&mut self, ctx: &egui::Context) -> () {
+        match self.party_bind.state() {
+            StateWithData::Finished(party) => {
+                let db = self.financial_database.clone();
+                self.party = party.clone();
+                let party_id = self.to_delete_party_id;
+                let fut = async move || { db.delete_party(party_id).await };
+                self.delete_party_bind.state_or_request(fut);
+                match self.delete_party_bind.state() {
+                    StateWithData::Finished(_) => {
+                        self.party_bind.clear();
+                        self.delete_party_bind.clear();
+                        self.show_input_party_window = true;
+                        self.show_browse_last_transactions_window = false;
+                    },
+                    StateWithData::Failed(e) => {
+                        self.error_message = e.to_string();
+                        self.show_error_window = true;
+                    },
+                    _ => {},
+                };
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true;
+            },
+            _ => {},
+        };
+                                                            
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("browse_last_transactions_window"),
             egui::ViewportBuilder::default()
@@ -107,33 +135,10 @@ impl AppState {
                                                             .on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded")
                                                             .clicked() {
                                                             let db = self.financial_database.clone();
-                                                            let party_id = transaction_view.party_id;
+                                                            self.to_delete_party_id = transaction_view.party_id;
+                                                            let party_id = self.to_delete_party_id;
                                                             let fut = async move { db.party(party_id).await };
                                                             self.party_bind.request(fut);
-                                                            match self.party_bind.state() {
-                                                                StateWithData::Finished(party) => {
-                                                                    let db = self.financial_database.clone();
-                                                                    self.party = party.clone();
-                                                                    let fut = async move { db.delete_party(party_id).await };
-                                                                    self.delete_party_bind.request(fut);
-                                                                    match self.delete_party_bind.state() {
-                                                                        StateWithData::Finished(_) => {
-                                                                            self.show_input_party_window = true;
-                                                                            self.show_browse_last_transactions_window = false;
-                                                                        },
-                                                                        StateWithData::Failed(e) => {
-                                                                            self.error_message = e.to_string();
-                                                                            self.show_error_window = true;
-                                                                        },
-                                                                        _ => {},
-                                                                    };
-                                                                },
-                                                                StateWithData::Failed(e) => {
-                                                                    self.error_message = e.to_string();
-                                                                    self.show_error_window = true;
-                                                                },
-                                                                _ => {},
-                                                            };
                                                         }
                                                     });
                                                 });
@@ -178,6 +183,33 @@ impl AppState {
                 }
             }
             false => String::from("All accounts"),
+        };
+        
+        match self.party_bind.state() {
+            StateWithData::Finished(party) => {
+                let db = self.financial_database.clone();
+                self.party = party.clone();
+                let party_id = self.to_delete_party_id;
+                let fut = async move || { db.delete_party(party_id).await };
+                match self.delete_party_bind.state_or_request(fut) {
+                    StateWithData::Finished(_) => {
+                        self.party_bind.clear();
+                        self.delete_party_bind.clear();
+                        self.show_input_party_window = true;
+                        self.show_browse_last_fund_movements_window = false;
+                    },
+                    StateWithData::Failed(e) => {
+                        self.error_message = e.to_string();
+                        self.show_error_window = true;
+                    },
+                    _ => {},
+                };
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true;
+            },
+            _ => {},
         };
         
         ctx.show_viewport_immediate(
@@ -309,33 +341,10 @@ impl AppState {
                                                             .on_hover_text("Removes the party from the database, and launches the input menu with an equal party already loaded")
                                                             .clicked() {
                                                             let db = self.financial_database.clone();
-                                                            let party_id = fund_movement_view.party_id;
+                                                            self.to_delete_party_id = fund_movement_view.party_id;
+                                                            let party_id = self.to_delete_party_id;
                                                             let fut = async move { db.party(party_id).await };
                                                             self.party_bind.request(fut);
-                                                            match self.party_bind.state() {
-                                                                StateWithData::Finished(party) => {
-                                                                    let db = self.financial_database.clone();
-                                                                    self.party = party.clone();
-                                                                    let fut = async move { db.delete_party(party_id).await };
-                                                                    self.delete_party_bind.request(fut);
-                                                                    match self.delete_party_bind.state() {
-                                                                        StateWithData::Finished(_) => {
-                                                                            self.show_input_party_window = true;
-                                                                            self.show_browse_last_fund_movements_window = false;
-                                                                        },
-                                                                        StateWithData::Failed(e) => {
-                                                                            self.error_message = e.to_string();
-                                                                            self.show_error_window = true;
-                                                                        },
-                                                                        _ => {},
-                                                                    };
-                                                                },
-                                                                StateWithData::Failed(e) => {
-                                                                    self.error_message = e.to_string();
-                                                                    self.show_error_window = true;
-                                                                },
-                                                                _ => {},
-                                                            };
                                                         }
                                                     });
                                                 });

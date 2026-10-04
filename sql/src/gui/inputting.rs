@@ -381,6 +381,19 @@ impl AppState {
         );
     }
     pub fn handle_show_input_party_window(&mut self, ctx: &egui::Context) -> () {
+        match self.insert_party_bind.state() {
+            StateWithData::Finished(_) => {
+                self.clear_fields();
+                self.insert_party_bind.clear();
+                self.show_input_party_window = false;
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true; 
+            },
+            _ => {},
+        }
+                                            
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_party_window"),
             egui::ViewportBuilder::default()
@@ -567,17 +580,6 @@ impl AppState {
                                             let mut party = self.party.clone();
                                             let fut = async move { db.insert_party(&mut party).await };
                                             self.insert_party_bind.request(fut);
-                                            match self.insert_party_bind.state() {
-                                                StateWithData::Finished(_) => {
-                                                    self.clear_fields();
-                                                    self.show_input_party_window = false;
-                                                },
-                                                StateWithData::Failed(e) => {
-                                                    self.error_message = e.to_string();
-                                                    self.show_error_window = true; 
-                                                },
-                                                _ => {},
-                                            }
                                         }
                                     }
                                 });
