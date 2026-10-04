@@ -18,3 +18,8 @@ from
 		accounts.account_id = fund_changes.account_id
 		and accounts.currency = fund_changes.currency
 where accounts.initial_balance + fund_changes.value >= 0.01
+order by
+	accounts.country,
+	accounts.currency,
+	accounts.account_type,
+	accounts.name

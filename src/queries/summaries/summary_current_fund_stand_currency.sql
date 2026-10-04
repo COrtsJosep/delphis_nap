@@ -3,10 +3,11 @@ select
 	accounts.country,
 	? as "currency!: String",
 	accounts.account_type,
-	(accounts.initial_balance + fund_changes.value) 
-		* (case when currency_exchanges_to_eur.value is null then 1.0 else currency_exchanges_to_eur.value end) 
-		* (case when currency_exchanges_from_eur.value is null then 1.0 else currency_exchanges_from_eur.value end) 
-		as "current_value!"
+	sum(
+		(accounts.initial_balance + fund_changes.value) 
+			* (case when currency_exchanges_to_eur.value is null then 1.0 else currency_exchanges_to_eur.value end) 
+			* (case when currency_exchanges_from_eur.value is null then 1.0 else currency_exchanges_from_eur.value end) 
+	) as "current_value!"
 from 
 	accounts
 	left join (
@@ -31,3 +32,11 @@ from
 		and currency_exchanges_from_eur.currency_to = ?
 		and currency_exchanges_from_eur.currency_from = 'EUR'
 where accounts.initial_balance + fund_changes.value >= 0.01
+group by
+	accounts.name,
+	accounts.country,
+	accounts.account_type
+order by 
+	accounts.country,
+	accounts.account_type,
+	accounts.name
