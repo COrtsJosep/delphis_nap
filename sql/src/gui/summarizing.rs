@@ -24,7 +24,8 @@ impl AppState {
                 egui::CentralPanel::default().show_inside(ctx, |ui| {
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
-                        .size(Size::remainder().at_least(120.0))
+                        .size(Size::initial(600.0))
+                        .size(Size::remainder().at_least(10.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
                                 egui::Grid::new("expense_summary")
@@ -136,7 +137,8 @@ impl AppState {
 
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
-                        .size(Size::remainder().at_least(120.0))
+                        .size(Size::initial(600.0))
+                        .size(Size::remainder().at_least(10.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
                                 egui::Grid::new("fund_stand")
@@ -243,7 +245,7 @@ impl AppState {
 
                     StripBuilder::new(ui)
                         .size(Size::exact(40.0))
-                        .size(Size::initial(240.0))
+                        .size(Size::initial(600.0))
                         .size(Size::remainder().at_least(10.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
