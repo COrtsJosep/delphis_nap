@@ -1,8 +1,15 @@
-use delphis_nap::modules::gui::*;
+pub mod financial;
+pub mod financial_database;
+pub mod gui;
+pub mod table_records;
+
+use crate::financial_database::FinancialDataBase;
+use crate::gui::AppState;
 use eframe::egui;
 
+const FINANCIAL_DATABASE_URL: &str = "sqlite://./data/financial_database.sqlite";
+
 fn main() -> eframe::Result {
-    env_logger::init();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([360.0, 100.0]),
         ..Default::default()
@@ -10,6 +17,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Financial Application",
         options,
-        Box::new(|_cc| Ok(Box::<AppState>::default())),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::<AppState>::default())
+            }
+        ),
     )
 }

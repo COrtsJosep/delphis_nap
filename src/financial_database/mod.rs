@@ -240,17 +240,11 @@ impl FinancialDataBase {
     async fn update_ecb_exchange_table(
             pool: &SqlitePool, 
             currency_to: String,
-            last_date: String
+            start_date: String
         ) -> Result<(), sqlx::Error> {
         // fetches the ECB data, reads the csv, and inserts the new data
         let mut currency_from: String = BASE_CURRENCY.to_string();
         let mut currency_to: String = currency_to.clone();
-        let start_date: String = Date::strptime("%Y-%m-%d", &last_date)
-            .unwrap()
-            .tomorrow()
-            .unwrap()
-            .strftime("%Y-%m-%d")
-            .to_string();
         let url = format!(
             "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.{}.SP00.A?format=csvdata&detail=dataonly&startPeriod={}",
             currency_to,
@@ -296,7 +290,7 @@ impl FinancialDataBase {
     }
 
     async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        let earliest_calendar_day_string: String = String::from("1999-01-03");
+        let earliest_calendar_day_string: String = String::from("1999-01-04");
         let latest_calendar_day_string: String = String::from("2049-12-31");
         
         // first: create necessary tables:
@@ -356,14 +350,26 @@ impl FinancialDataBase {
                         Err(_e) => earliest_calendar_day_string.clone(), // start of the time series
                     };
             
-            if last_date < today {
+            let start_date: String = match last_date == earliest_calendar_day_string {
+                true => {last_date.clone()},  // start that same date
+                false => {  // start the day after the last observation
+                    Date::strptime("%Y-%m-%d", &last_date)
+                        .unwrap()
+                        .tomorrow()
+                        .unwrap()
+                        .strftime("%Y-%m-%d")
+                        .to_string()
+                },
+            };
+            
+            if start_date <= today {
                 FinancialDataBase::update_ecb_exchange_table(
                     &pool, 
                     currency_to.clone(),
-                    last_date
+                    start_date
                 ).await?;
             }
-            
+
             // first for from->to
             sqlx::query_file!(
                 "src/queries/insertion/insert_into_currency_exchanges.sql",
