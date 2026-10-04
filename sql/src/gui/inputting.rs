@@ -79,6 +79,22 @@ impl AppState {
     }
 
     pub fn handle_show_input_entity_window(&mut self, ctx: &egui::Context) -> () {
+        match self.insert_entity_bind.state() {
+            StateWithData::Finished(entity_id) => {
+                self.transaction_entity_id = *entity_id;
+                self.clear_entity_fields();
+                self.show_input_entity_window = false;
+                self.insert_entity_bind.clear();
+                self.poll_entity_string = true;
+                self.poll_entities_data = true;
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true; 
+            },
+            _ => {},
+        }
+                                
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_entity_window"),
             egui::ViewportBuilder::default()
@@ -196,18 +212,6 @@ impl AppState {
                                 let db = self.financial_database.clone();
                                 let fut = async move { db.insert_entity(&entity).await };
                                 self.insert_entity_bind.request(fut);
-                                match self.insert_entity_bind.state() {
-                                    StateWithData::Finished(entity_id) => {
-                                        self.transaction_entity_id = *entity_id;
-                                        self.clear_entity_fields();
-                                        self.show_input_entity_window = false;
-                                    },
-                                    StateWithData::Failed(e) => {
-                                        self.error_message = e.to_string();
-                                        self.show_error_window = true; 
-                                    },
-                                    _ => {},
-                                }
                             }
                         }
                     });
@@ -220,6 +224,22 @@ impl AppState {
         );
     }
     pub fn handle_show_input_account_window(&mut self, ctx: &egui::Context) -> () {
+        match self.insert_account_bind.state() {
+            StateWithData::Finished(account_id) => {
+                self.transaction_account_id = *account_id;
+                self.clear_account_fields();
+                self.insert_account_bind.clear();
+                self.poll_account_data = true;
+                self.poll_accounts_data = true;
+                self.show_input_account_window = false;
+            },
+            StateWithData::Failed(e) => {
+                self.error_message = e.to_string();
+                self.show_error_window = true; 
+            },
+            _ => {},
+        }
+                                
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_account_window"),
             egui::ViewportBuilder::default()
@@ -348,18 +368,7 @@ impl AppState {
                                 let db = self.financial_database.clone();
                                 let fut = async move { db.insert_account(&account).await };
                                 self.insert_account_bind.request(fut);
-                                match self.insert_account_bind.state() {
-                                    StateWithData::Finished(account_id) => {
-                                        self.transaction_account_id = *account_id;
-                                        self.clear_account_fields();
-                                        self.show_input_account_window = false;
-                                    },
-                                    StateWithData::Failed(e) => {
-                                        self.error_message = e.to_string();
-                                        self.show_error_window = true; 
-                                    },
-                                    _ => {},
-                                }
+
                             }
                         }
                     });
@@ -638,6 +647,22 @@ impl AppState {
             };
             self.accounts_bind.request(fut);
         }
+        
+        if self.poll_entities_data {
+            self.poll_entities_data = false;
+            let db = self.financial_database.clone();
+
+            let fut = async move { 
+                let entity_ids = db.iter_entity_ids().await?;
+                let mut entities = Vec::new();
+                for entity_id in entity_ids {
+                    let entity = db.entity(entity_id).await?;
+                    entities.push((entity_id, entity));
+                }
+                Ok(entities)
+            };
+            self.entities_bind.request(fut);
+        }
 
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_transaction_window"),
@@ -771,23 +796,12 @@ impl AppState {
                                         let response = ui.text_edit_singleline(&mut self.transaction_filter);
                                         response.request_focus();
                                         
-                                        let db = self.financial_database.clone();
-                                        let filter = self.transaction_filter.clone();
-                                        let fut = || async move {
-                                            let entity_ids = db.iter_entity_ids().await?;
-                                            let mut entities = Vec::new();
-                                            for entity_id in entity_ids {
-                                                let entity = db.entity(entity_id).await?;
-                                                entities.push((entity_id, entity));
-                                            }
-                                            Ok(entities)
-                                        };
-                                        match self.entities_bind.state_or_request(fut) {
+                                        match self.entities_bind.state() {
                                             StateWithData::Finished(entities) => {
                                                 let mut i: i64 = 0;
                                                 for (entity_id, entity) in entities {
                                                     let entity_string = entity.to_string();
-                                                    if entity_string.contains(&filter) & (i < 20) {
+                                                    if entity_string.contains(&self.transaction_filter) & (i < 20) {
                                                         if ui.selectable_value(
                                                             &mut self.transaction_entity_id,
                                                             *entity_id,

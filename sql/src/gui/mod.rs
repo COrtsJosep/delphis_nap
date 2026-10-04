@@ -88,6 +88,8 @@ pub struct AppState {
     insert_entity_bind: Bind<i64, sqlx::Error>,
     #[derivative(Default(value = "true"))]
     poll_entity_string: bool,
+    #[derivative(Default(value = "true"))]
+    poll_entities_data: bool,
     
     #[derivative(Default(value = "Bind::new(true)"))]
     transaction_categories_bind: Bind<Vec<String>, sqlx::Error>,
