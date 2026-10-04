@@ -327,6 +327,7 @@ impl Display for Entity {
 }
 
 /// Account where funds are stored.
+#[derive(Debug)]
 pub struct Account {
     name: String,
     country: String,

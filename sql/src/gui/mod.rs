@@ -65,12 +65,14 @@ pub struct AppState {
     account_bind: Bind<Account, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     accounts_bind: Bind<Vec<(i64, Account)>, sqlx::Error>,
+    #[derivative(Default(value = "true"))]
+    poll_accounts_data: bool,
     #[derivative(Default(value = "Bind::new(true)"))]
     account_countries_bind: Bind<Vec<String>, sqlx::Error>,
     #[derivative(Default(value = "Bind::new(true)"))]
     insert_account_bind: Bind<i64, sqlx::Error>,
     #[derivative(Default(value = "true"))]
-    poll_account_string: bool,
+    poll_account_data: bool,
     #[derivative(Default(value = "true"))]
     reload_browse_account_string: bool,
     
@@ -104,6 +106,7 @@ pub struct AppState {
     transaction_entity_string: String,
     transaction_account_id: i64,
     transaction_account_string: String,
+    transaction_account_currency: Currency,
     transaction_type: TransactionType,
     transaction_filter: String,
 

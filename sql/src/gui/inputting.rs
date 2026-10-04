@@ -6,7 +6,7 @@ use egui::{Align, Layout, PopupCloseBehavior};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_extras::*;
 use strum::IntoEnumIterator;
-use egui_async::{StateWithData, Bind};
+use egui_async::{StateWithData};
 
 impl AppState {
     fn clear_fields(&mut self) -> () {
@@ -21,6 +21,7 @@ impl AppState {
         self.transaction_entity_string = String::default();
         self.transaction_account_id = i64::default();
         self.transaction_account_string = String::default();
+        self.transaction_account_currency = Currency::default();
         self.transaction_type = TransactionType::default();
         self.transaction_filter = String::default();
     }
@@ -68,22 +69,7 @@ impl AppState {
     }
 
     fn is_valid_transaction_currency(&mut self) -> bool {
-        let mut bind: Bind<Account, sqlx::Error> = Bind::new(true);
-        let db = self.financial_database.clone();
-        let transaction_account_id = self.transaction_account_id;
-        let fut = async move { db.account(transaction_account_id).await };
-        
-        bind.request(fut);
-        
-        match bind.state() {
-            StateWithData::Finished(account) => &self.transaction_currency == account.currency(),
-            StateWithData::Failed(e) => {
-                self.error_message = e.to_string();
-                self.show_error_window = true;
-                false
-            },
-            _ => false,
-        }
+        self.transaction_currency == self.transaction_account_currency
     }
 
     fn are_valid_transaction_fields(&mut self) -> bool {
@@ -615,8 +601,8 @@ impl AppState {
             _ => {},
         }
         
-        if self.poll_account_string {
-            self.poll_account_string = false;
+        if self.poll_account_data {
+            self.poll_account_data = false;
             let db = self.financial_database.clone();
             let transaction_account_id = self.transaction_account_id;
             let fut = async move { db.account(transaction_account_id).await };
@@ -625,12 +611,32 @@ impl AppState {
         match self.account_bind.state() {
             StateWithData::Finished(transaction_account) => {
                 self.transaction_account_string = transaction_account.to_string();
+                self.transaction_account_currency = transaction_account.currency().clone();
             },
             StateWithData::Failed(e) => {
                 self.error_message = e.to_string();
                 self.show_error_window = true;
             },
             _ => {},
+        }
+        
+        if self.poll_accounts_data {
+            self.poll_accounts_data = false;
+            let db = self.financial_database.clone();
+            let currency = self.transaction_currency.clone();
+
+            let fut = async move { 
+                let account_ids = db.iter_account_ids().await?;
+                let mut accounts = Vec::new();
+                for account_id in account_ids {
+                    let account = db.account(account_id).await?;
+                    if account.currency() == &currency {
+                        accounts.push((account_id, account));
+                    }
+                }
+                Ok(accounts) 
+            };
+            self.accounts_bind.request(fut);
         }
 
         ctx.show_viewport_immediate(
@@ -688,11 +694,13 @@ impl AppState {
                                 .selected_text(format!("{}", self.transaction_currency))
                                 .show_ui(ui, |ui| {
                                     for possible_transaction_currency in Currency::iter() {
-                                        ui.selectable_value(
-                                            &mut self.transaction_currency,
-                                            possible_transaction_currency.clone(),
-                                            format!("{possible_transaction_currency}"),
-                                        );
+                                        if ui.selectable_value(
+                                                &mut self.transaction_currency,
+                                                possible_transaction_currency.clone(),
+                                                format!("{possible_transaction_currency}"),
+                                            ).clicked() {
+                                            self.poll_accounts_data = true;
+                                        };
                                     }
                                 });
                             if !self.is_valid_transaction_currency()
@@ -716,21 +724,7 @@ impl AppState {
                                 ComboBox::from_id_salt("Transaction account")
                                     .selected_text(format!("{}", self.transaction_account_string))
                                     .show_ui(ui, |ui| {
-                                        match self.accounts_bind.state_or_request(|| {
-                                            let db = self.financial_database.clone();
-                                            let currency = self.transaction_currency.clone();
-                                            async move {
-                                                let account_ids = db.iter_account_ids().await?;
-                                                let mut accounts = Vec::new();
-                                                for account_id in account_ids {
-                                                    let account = db.account(account_id).await?;
-                                                    if account.currency() == &currency {
-                                                        accounts.push((account_id, account));
-                                                    }
-                                                }
-                                                Ok(accounts)
-                                            }
-                                        }) {
+                                        match self.accounts_bind.state() {
                                             StateWithData::Finished(accounts) => {
                                                 for (account_id, account) in accounts {
                                                     if ui.selectable_value(
@@ -738,9 +732,8 @@ impl AppState {
                                                         *account_id,  // Use the account_id from the loop
                                                         format!("{}", account.to_string()),
                                                     ).clicked() {
-                                                        self.poll_account_string = true;
+                                                        self.poll_account_data = true;
                                                     }
-                                                    
                                                 }
                                             },
                                             StateWithData::Pending => {
