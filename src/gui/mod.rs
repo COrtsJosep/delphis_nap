@@ -94,8 +94,12 @@ pub struct AppState {
     
     #[derivative(Default(value = "Bind::new(true)"))]
     transaction_categories_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "true"))]
+    poll_transaction_categories: bool,
     #[derivative(Default(value = "Bind::new(true)"))]
     transaction_subcategories_bind: Bind<Vec<String>, sqlx::Error>,
+    #[derivative(Default(value = "true"))]
+    poll_transaction_subcategories: bool,
 
     transaction_value: f64,
     transaction_value_tentative: String,

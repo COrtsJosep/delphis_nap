@@ -665,6 +665,25 @@ impl AppState {
             };
             self.entities_bind.request(fut);
         }
+        
+        if self.poll_transaction_categories {
+            self.poll_transaction_categories = false;
+            let db = self.financial_database.clone();
+            let transaction_type = self.transaction_type.clone();
+            let fut = async move { db.transaction_categories(&transaction_type).await };
+            
+            self.transaction_categories_bind.request(fut);
+        }
+        
+        if self.poll_transaction_subcategories {
+            self.poll_transaction_subcategories = false;
+            let db = self.financial_database.clone();
+            let transaction_type = self.transaction_type.clone();
+            let transaction_category = self.transaction_category.clone();
+            let fut = async move { db.transaction_subcategories(&transaction_type, transaction_category).await };
+            
+            self.transaction_subcategories_bind.request(fut);
+        }
 
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("input_transaction_window"),
@@ -682,7 +701,6 @@ impl AppState {
                         .num_columns(3)
                         .spacing([45.0, 4.0])
                         .min_col_width(150.0)
-                        //.striped(true)
                         .show(ui, |ui| {
                             ui.label("Transaction type:")
                                 .on_hover_text("Category of the transaction");
@@ -690,11 +708,13 @@ impl AppState {
                             // important point!
                             ui.horizontal(|ui| {
                                 for transaction_type in TransactionType::iter() {
-                                    ui.selectable_value(
+                                    if ui.selectable_value(
                                         &mut self.transaction_type,
                                         transaction_type.clone(),
                                         transaction_type.to_string(),
-                                    );
+                                        ).clicked() {
+                                        self.poll_transaction_categories = true;   
+                                    }
                                 }
                             });
                             ui.end_row();
@@ -832,19 +852,19 @@ impl AppState {
 
                                 ui.label("Transaction category:")
                                     .on_hover_text("Category of the transaction.");
-                                let db = self.financial_database.clone();
-                                let transaction_type = self.transaction_type.clone();
-                                let fut = || async move { db.transaction_categories(&transaction_type).await };
-                                match self.transaction_categories_bind.state_or_request(fut) {
+
+                                match self.transaction_categories_bind.state() {
                                     StateWithData::Finished(transaction_categories) => { 
-                                        ui.add(
+                                        if ui.add(
                                             AutoCompleteTextEdit::new(
                                                 &mut self.transaction_category,
                                                 transaction_categories,
                                             )
                                             .max_suggestions(10)
                                             .highlight_matches(true),
-                                        );
+                                        ).lost_focus() {
+                                            self.poll_transaction_subcategories = true;
+                                        };
                                     },
                                     StateWithData::Failed(e) => { 
                                         self.error_message = e.to_string();
@@ -868,11 +888,7 @@ impl AppState {
 
                                 ui.label("Transaction subcategory:")
                                     .on_hover_text("Subcategory of the transaction.");
-                                let db = self.financial_database.clone();
-                                let transaction_type = self.transaction_type.clone();
-                                let transaction_category = self.transaction_category.clone();
-                                let fut = || async move { db.transaction_subcategories(&transaction_type, transaction_category).await };
-                                match self.transaction_subcategories_bind.state_or_request(fut) {
+                                match self.transaction_subcategories_bind.state() {
                                     StateWithData::Finished(transaction_subcategories) => { 
                                         ui.add(
                                             AutoCompleteTextEdit::new(
