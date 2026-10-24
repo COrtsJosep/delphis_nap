@@ -252,41 +252,46 @@ impl FinancialDataBase {
             start_date
         );
 
-        let response = reqwest::get(url).await.unwrap();
-        let csv_data = response.bytes().await.unwrap();
-        let cursor = Cursor::new(csv_data.clone());
-        let mut reader = csv::Reader::from_reader(cursor);
-        let records = reader.deserialize::<ECBRecord>();
-        let mut transaction = pool.begin().await?;
-        
-        for result in records {
-            let record: ECBRecord = result.expect("Corrupted record in the ECB csv");
-            let record_date: String = record.date;
-            if let Some(value) = record.value {
-                let mut record_value: f64 = value;
-            
-                for _ in 0..2 {
-                    let id: String =
-                        format!("{}_{}_{}", record_date, currency_from, currency_to);
-                    sqlx::query_file!(
-                        "src/queries/insertion/insert_into_ecb_exchanges.sql",
-                        id,
-                        record_date,
-                        currency_from,
-                        currency_to,
-                        record_value
-                    )
-                    .execute(&mut *transaction)
-                    .await?;
+        // if the request fails (e.g., due to no internet connection) then abort update
+        match reqwest::get(url).await {
+            Err(_e) => {Ok(())},
+            Ok(response) => {
+                let csv_data = response.bytes().await.unwrap();
+                let cursor = Cursor::new(csv_data.clone());
+                let mut reader = csv::Reader::from_reader(cursor);
+                let records = reader.deserialize::<ECBRecord>();
+                let mut transaction = pool.begin().await?;
+                
+                for result in records {
+                    let record: ECBRecord = result.expect("Corrupted record in the ECB csv");
+                    let record_date: String = record.date;
+                    if let Some(value) = record.value {
+                        let mut record_value: f64 = value;
+                    
+                        for _ in 0..2 {
+                            let id: String =
+                                format!("{}_{}_{}", record_date, currency_from, currency_to);
+                            sqlx::query_file!(
+                                "src/queries/insertion/insert_into_ecb_exchanges.sql",
+                                id,
+                                record_date,
+                                currency_from,
+                                currency_to,
+                                record_value
+                            )
+                            .execute(&mut *transaction)
+                            .await?;
 
-                    let temp: String = currency_from;
-                    currency_from = currency_to;
-                    currency_to = temp;
-                    record_value = 1.0 / record_value;
+                            let temp: String = currency_from;
+                            currency_from = currency_to;
+                            currency_to = temp;
+                            record_value = 1.0 / record_value;
+                        }
+                    }
                 }
+                transaction.commit().await
             }
         }
-        transaction.commit().await
     }
 
     async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
