@@ -17,7 +17,7 @@ as
 			and currency_exchanges_to_eur.currency_from = expenses.currency
 		left join currency_exchanges as currency_exchanges_from_eur
 		on
-			currency_exchanges_from_eur.date = min((select max(date) from currency_exchanges), ?)
+			currency_exchanges_from_eur.date = expenses.date
 			and currency_exchanges_from_eur.currency_to = ?
 			and currency_exchanges_from_eur.currency_from = currency_exchanges_to_eur.currency_to	
 	where ? <= expenses.date and expenses.date <= ?

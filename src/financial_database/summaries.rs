@@ -127,7 +127,6 @@ impl FinancialDataBase {
 
         sqlx::query_file!(
             "src/queries/summaries/temporary_expenses_grouped.sql",
-            date_to_string,
             currency_to_string,
             date_from_string,
             date_to_string
