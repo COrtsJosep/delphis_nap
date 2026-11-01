@@ -300,7 +300,7 @@ impl FinancialDataBase {
         
         // first: create necessary tables:
         //      - EBC exchange rates table (raw data, with holes in the timeline)
-        //      - date table (just a table with all dates, no holes
+        //      - date table (just a table with all dates, no holes)
         //      - currency exchange table (dropped and recreated each time)
         sqlx::query_file!("src/queries/table_creation/create_ecb_exchange_table.sql")
             .execute(pool)
@@ -380,7 +380,10 @@ impl FinancialDataBase {
                 "src/queries/insertion/insert_into_currency_exchanges.sql",
                 currency_from,
                 currency_to,
-                today,
+                currency_from,
+                currency_to,
+                currency_from,
+                currency_to,
                 currency_from,
                 currency_to,
                 currency_from,
@@ -394,7 +397,10 @@ impl FinancialDataBase {
                 "src/queries/insertion/insert_into_currency_exchanges.sql",
                 currency_to,
                 currency_from,
-                today,
+                currency_to,
+                currency_from,
+                currency_to,
+                currency_from,
                 currency_to,
                 currency_from,
                 currency_to,

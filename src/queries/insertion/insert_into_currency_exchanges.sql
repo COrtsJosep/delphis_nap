@@ -1,30 +1,33 @@
 insert into currency_exchanges 
-(currency_exchange_id, date, currency_from, currency_to, value)
-with ecb_exchanges_nogaps as (
+(currency_exchange_id, date_from, date_to, currency_from, currency_to, value)
+with ecb_exchanges_windowed as (
 	select 
-		dates.date,
-		ecb_exchanges.value,
-		count(ecb_exchanges.value) over (order by dates.date) as value_count
-   	from dates
-	left join ecb_exchanges
-		on dates.date = ecb_exchanges.date
-		and ecb_exchanges.currency_from = ?
-		and ecb_exchanges.currency_to = ?
-	where dates.date <= ?
+		currency_exchange_id,
+		date as date_from,
+		lead(date, 1, NULL) over (order by date) as date_to,
+		coalesce(
+			value,  -- value for almost all rows 
+			lead(value, 1, NULL) over (order by date)  -- value for first row
+		) as value
+   	from (
+   		select *
+   		from ecb_exchanges
+		where 
+			currency_from = ?
+			and currency_to = ?
+		union select concat('1900-01-01', '_', ?, '_', ?), '1900-01-01', ?, ?, null
+		union select null, '3000-12-31', ?, ?, null
+	)
 )
 select
-	concat(
-		date,
-		'_',
-		?, -- currency_from
-		'_',
-		?  -- currency_to
-	),
-	date,
+	currency_exchange_id,
+	date_from,
+	date_to,
 	?,  -- currency_from
 	?,  -- currency_to
-	first_value(value) over (partition by value_count order by date) as value
-from ecb_exchanges_nogaps
+	value
+from ecb_exchanges_windowed
+where currency_exchange_id is not null -- filter out last row (3000-12-31)
 
 	        
 

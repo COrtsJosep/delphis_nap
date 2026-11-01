@@ -8,12 +8,12 @@ from
 	incomes
 	left join currency_exchanges as currency_exchanges_to_eur
 	on 
-		currency_exchanges_to_eur.date = incomes.date 
+		currency_exchanges_to_eur.date_from <= incomes.date < currency_exchanges_to_eur.date_to
 		and currency_exchanges_to_eur.currency_to = 'EUR'
 		and currency_exchanges_to_eur.currency_from = incomes.currency
 	left join currency_exchanges as currency_exchanges_from_eur
 	on
-		currency_exchanges_from_eur.date = incomes.date
+		currency_exchanges_from_eur.date_from <= incomes.date < currency_exchanges_from_eur.date_to
 		and currency_exchanges_from_eur.currency_to = ?
 		and currency_exchanges_from_eur.currency_from = currency_exchanges_to_eur.currency_to
 where 

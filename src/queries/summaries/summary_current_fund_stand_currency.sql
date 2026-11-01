@@ -23,12 +23,12 @@ from
 		and accounts.currency = fund_changes.currency
 	left join currency_exchanges as currency_exchanges_to_eur
 	on 
-		currency_exchanges_to_eur.date = (select max(date) from currency_exchanges)
+		currency_exchanges_to_eur.date_from = (select max(date_from) from currency_exchanges)
 		and currency_exchanges_to_eur.currency_to = 'EUR'
 		and currency_exchanges_to_eur.currency_from = accounts.currency
 	left join currency_exchanges as currency_exchanges_from_eur
 	on
-		currency_exchanges_from_eur.date = (select max(date) from currency_exchanges)
+		currency_exchanges_from_eur.date_from = (select max(date_from) from currency_exchanges)
 		and currency_exchanges_from_eur.currency_to = ?
 		and currency_exchanges_from_eur.currency_from = 'EUR'
 where accounts.initial_balance + fund_changes.value >= 0.01

@@ -1,7 +1,7 @@
 create temporary table expense_evolution_temporary
 as 
 	select
-		strftime(?, base.date) as date,
+		strftime(?, dates.date) as date,
 		expenses.category,
 		sum(
 			expenses.value
@@ -9,28 +9,26 @@ as
 			* (case when currency_exchanges_from_eur.value is null then 1.0 else currency_exchanges_from_eur.value end) 
 		) as value
 	from
-		(select distinct date, currency_to as currency from currency_exchanges) as base
+		dates
 		left join currency_exchanges as currency_exchanges_to_eur
 		on
-			currency_exchanges_to_eur.date = base.date
-			and currency_exchanges_to_eur.currency_from = base.currency
+			currency_exchanges_to_eur.date_from <= dates.date < currency_exchanges_to_eur.date_to
 			and currency_exchanges_to_eur.currency_to = 'EUR'
 		left join currency_exchanges as currency_exchanges_from_eur
 		on
-			currency_exchanges_from_eur.date = base.date
+			currency_exchanges_from_eur.date_from <= dates.date < currency_exchanges_from_eur.date_to
 			and currency_exchanges_from_eur.currency_to = ?
 			and currency_exchanges_from_eur.currency_from = 'EUR'
 		left join expenses
 		on 
-			expenses.date = base.date
-			and expenses.currency = base.currency
+			expenses.date = dates.date
+			and expenses.currency = currency_exchanges_to_eur.currency_from
 	where
-		base.date >= (select min(date) from expenses)
-		and base.date <= (select max(date) from expenses)
+		(select min(date) from expenses) <= dates.date <= (select max(date) from expenses)
 		and expenses.category is not null
 	group by 
-		strftime(?, base.date),
+		strftime(?, dates.date),
 		expenses.category
 	order by
-		strftime(?, base.date) asc,
+		strftime(?, dates.date) asc,
 		expenses.category asc
