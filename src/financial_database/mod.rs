@@ -295,8 +295,8 @@ impl FinancialDataBase {
     }
 
     async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        let earliest_calendar_day_string: String = String::from("1999-01-04");
-        let latest_calendar_day_string: String = String::from("2049-12-31");
+        let earliest_calendar_day_string: String = String::from("1999-01-01");
+        let latest_calendar_day_string: String = String::from("2039-12-31");
         
         // first: create necessary tables:
         //      - EBC exchange rates table (raw data, with holes in the timeline)
@@ -315,7 +315,7 @@ impl FinancialDataBase {
                 .fetch_one(pool)
                 .await?
                 .rowcount;          
-                
+            
         if date_table_rowcount == 0i64 {
             FinancialDataBase::init_date_table(
                 &pool,
@@ -336,78 +336,86 @@ impl FinancialDataBase {
         
         let today: String = Zoned::now().date().strftime(DATE_FORMAT).to_string();
         for other_currency in Currency::iter() {
-            if other_currency == BASE_CURRENCY {
-                continue;
-            }
-            
             let currency_from: String = BASE_CURRENCY.to_string();
             let currency_to: String = other_currency.to_string();
+            
+            if other_currency == BASE_CURRENCY {
+                    sqlx::query_file!(
+                    "src/queries/insertion/insert_into_currency_exchanges_base_currency.sql",
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to
+                )
+                .execute(pool)
+                .await?;
+            } else {                    
+                let last_date: String =
+                    match sqlx::query!("select max(date) as max_date from ecb_exchanges where currency_to = ?", currency_to)
+                        .fetch_one(pool)
+                        .await
+                        {
+                            Ok(row) => match row.max_date {
+                                Some(date) => date,
+                                None => earliest_calendar_day_string.clone(),
+                            },
+                            Err(_e) => earliest_calendar_day_string.clone(), // start of the time series
+                        };
                 
-            let last_date: String =
-                match sqlx::query!("select max(date) as max_date from ecb_exchanges where currency_to = ?", currency_to)
-                    .fetch_one(pool)
-                    .await
-                    {
-                        Ok(row) => match row.max_date {
-                            Some(date) => date,
-                            None => earliest_calendar_day_string.clone(),
-                        },
-                        Err(_e) => earliest_calendar_day_string.clone(), // start of the time series
-                    };
-            
-            let start_date: String = match last_date == earliest_calendar_day_string {
-                true => {last_date.clone()},  // start that same date
-                false => {  // start the day after the last observation
-                    Date::strptime("%Y-%m-%d", &last_date)
-                        .unwrap()
-                        .tomorrow()
-                        .unwrap()
-                        .strftime("%Y-%m-%d")
-                        .to_string()
-                },
-            };
-            
-            if start_date <= today {
-                FinancialDataBase::update_ecb_exchange_table(
-                    &pool, 
-                    currency_to.clone(),
-                    start_date
-                ).await?;
-            }
+                let start_date: String = match last_date == earliest_calendar_day_string {
+                    true => {last_date.clone()},  // start that same date
+                    false => {  // start the day after the last observation
+                        Date::strptime("%Y-%m-%d", &last_date)
+                            .unwrap()
+                            .tomorrow()
+                            .unwrap()
+                            .strftime("%Y-%m-%d")
+                            .to_string()
+                    },
+                };
+                
+                if start_date <= today {
+                    FinancialDataBase::update_ecb_exchange_table(
+                        &pool, 
+                        currency_to.clone(),
+                        start_date
+                    ).await?;
+                }
 
-            // first for from->to
-            sqlx::query_file!(
-                "src/queries/insertion/insert_into_currency_exchanges.sql",
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to
-            )
-            .execute(pool)
-            .await?;
-            
-            // now the same, but for to->from
-            sqlx::query_file!(
-                "src/queries/insertion/insert_into_currency_exchanges.sql",
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-                currency_to,
-                currency_from,
-            )
-            .execute(pool)
-            .await?;
+                // first for from->to
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_currency_exchanges_other_currency.sql",
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to
+                )
+                .execute(pool)
+                .await?;
+                
+                // now the same, but for to->from
+                sqlx::query_file!(
+                    "src/queries/insertion/insert_into_currency_exchanges_other_currency.sql",
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                    currency_to,
+                    currency_from,
+                )
+                .execute(pool)
+                .await?;
+            }
         }
         Ok(())
     }

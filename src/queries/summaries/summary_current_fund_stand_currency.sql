@@ -4,34 +4,30 @@ select
 	? as "currency!: String",
 	accounts.account_type,
 	sum(
-		(accounts.initial_balance + fund_changes.value) 
-			* (case when currency_exchanges_to_eur.value is null then 1.0 else currency_exchanges_to_eur.value end) 
-			* (case when currency_exchanges_from_eur.value is null then 1.0 else currency_exchanges_from_eur.value end) 
-	) as "current_value!"
-from 
-	accounts
+		(accounts.initial_balance + coalesce(fund_changes.value, 0.0))
+			* currency_exchanges_to_eur.value
+			* currency_exchanges_from_eur.value
+	) as "current_value!: f64"
+from accounts
 	left join (
-		select
-			account_id,
-			currency,
-			sum(value) as value
-		from fund_movements
-		group by account_id, currency
-	) as fund_changes
-	on 
-		accounts.account_id = fund_changes.account_id
+			select
+				account_id,
+				currency,
+				sum(value) as value
+			from fund_movements
+			group by account_id, currency
+		) as fund_changes
+		on accounts.account_id = fund_changes.account_id
 		and accounts.currency = fund_changes.currency
-	left join currency_exchanges as currency_exchanges_to_eur
-	on 
-		currency_exchanges_to_eur.date_from = (select max(date_from) from currency_exchanges)
+	inner join currency_exchanges as currency_exchanges_to_eur
+		on currency_exchanges_to_eur.date = current_date
 		and currency_exchanges_to_eur.currency_to = 'EUR'
 		and currency_exchanges_to_eur.currency_from = accounts.currency
-	left join currency_exchanges as currency_exchanges_from_eur
-	on
-		currency_exchanges_from_eur.date_from = (select max(date_from) from currency_exchanges)
+	inner join currency_exchanges as currency_exchanges_from_eur
+		on currency_exchanges_from_eur.date = current_date
 		and currency_exchanges_from_eur.currency_to = ?
 		and currency_exchanges_from_eur.currency_from = 'EUR'
-where accounts.initial_balance + fund_changes.value >= 0.01
+where accounts.initial_balance + coalesce(fund_changes.value, 0.0) >= 0.01
 group by
 	accounts.name,
 	accounts.country,
