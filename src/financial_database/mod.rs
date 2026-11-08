@@ -295,7 +295,7 @@ impl FinancialDataBase {
     }
 
     async fn init_currency_exchange(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        let earliest_calendar_day_string: String = String::from("1999-01-01");
+        let earliest_calendar_day_string: String = String::from("2025-01-01");
         let latest_calendar_day_string: String = String::from("2039-12-31");
         
         // first: create necessary tables:
